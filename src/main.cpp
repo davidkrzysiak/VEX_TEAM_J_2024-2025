@@ -90,9 +90,13 @@ void drive_robot(float X_direction, float Y_direction, float angular_direction) 
 
 void robot_auto() {
 
+<<<<<<< HEAD
   //rotate_robot(45); 
+=======
+  rotate_robot(45);
 
-  TR.spinToPosition( 1000, degrees, true);
+>>>>>>> 683df252615b815ccbed810a1feeea42e1033633
+
 
  // translate_robot(0, 30);
 
@@ -123,6 +127,9 @@ void rotate_robot(float theta) {
       break;
 
     }
+
+    Brain.Screen.print(Inertial5.heading(degrees));
+    Brain.Screen.newLine(); 
 
   }
 
