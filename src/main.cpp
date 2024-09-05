@@ -124,6 +124,9 @@ void rotate_robot(float theta) {
 
     }
 
+    Brain.Screen.print(Inertial5.heading(degrees));
+    Brain.Screen.newLine(); 
+
   }
 
   TR.stop();
