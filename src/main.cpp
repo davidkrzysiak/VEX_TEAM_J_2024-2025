@@ -90,7 +90,7 @@ void drive_robot(float X_direction, float Y_direction, float angular_direction) 
 
 void robot_auto() {
 
-  //rotate_robot(45);
+  //rotate_robot(45); 
 
   TR.spinToPosition( 1000, degrees, true);
 
@@ -130,7 +130,7 @@ void rotate_robot(float theta) {
   TL.stop();
   BL.stop();
   BR.stop();
-
+  
 }
 
 void translate_robot(float X_pos_inches, float Y_pos_inches) {
