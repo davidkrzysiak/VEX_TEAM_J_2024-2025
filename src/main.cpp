@@ -91,7 +91,6 @@ void drive_robot(float X_direction, float Y_direction, float angular_direction) 
 void robot_auto() {
 
 <<<<<<< HEAD
-<<<<<<< HEAD
   //rotate_robot(45); 
 =======
   rotate_robot(45);
