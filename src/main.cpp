@@ -107,15 +107,24 @@ void robot_auto() {
 void rotate_robot(float theta) {
 
   float P_tuning_para = .25;
+
+  int direction = -1; //the robot will go couterclockwise if neg and clockwise if pos 
   
-  int error = (theta - Inertial5.heading(degrees));
+  int error = theta - Inertial5.heading(degrees);
+
+  if (abs(error) >= 180) {
+
+    direction = true;
+
+  }
+
 
   while (true) {
 
-    TR.setVelocity(-P_tuning_para * error ,percent);
-    TL.setVelocity(-P_tuning_para * error ,percent);
-    BL.setVelocity(-P_tuning_para * error ,percent);
-    BR.setVelocity(-P_tuning_para * error ,percent); 
+    TR.setVelocity(direction * P_tuning_para * error ,percent);
+    TL.setVelocity(direction * P_tuning_para * error ,percent);
+    BL.setVelocity(direction * P_tuning_para * error ,percent);
+    BR.setVelocity(direction * P_tuning_para * error ,percent); 
 
     TR.spin(forward);
     TL.spin(forward);
@@ -124,7 +133,7 @@ void rotate_robot(float theta) {
 
     error = theta - Inertial5.heading(degrees);
 
-    if(abs(error) < 1) {
+    if(error < 1) {
 
       TR.stop(hold);
       TL.stop(hold);
