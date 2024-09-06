@@ -90,13 +90,15 @@ void drive_robot(float X_direction, float Y_direction, float angular_direction) 
 
 void robot_auto() {
 
-<<<<<<< HEAD
-  //rotate_robot(45); 
-=======
+  bool record_data = false; 
+
+  if( Brain.SDcard.isInserted() == true ) {
+
+    record_data = true; 
+
+  }
+
   rotate_robot(45);
-
->>>>>>> 683df252615b815ccbed810a1feeea42e1033633
-
 
  // translate_robot(0, 30);
 
@@ -106,7 +108,7 @@ void rotate_robot(float theta) {
 
   float P_tuning_para = .25;
   
-  int error = (theta - Inertial5.heading(degrees)) / 365;
+  int error = (theta - Inertial5.heading(degrees));
 
   while (true) {
 
@@ -124,20 +126,22 @@ void rotate_robot(float theta) {
 
     if(abs(error) < 1) {
 
+      TR.stop(hold);
+      TL.stop(hold);
+      BL.stop(hold);
+      BR.stop(hold);
+
       break;
 
     }
 
-    Brain.Screen.print(Inertial5.heading(degrees));
-    Brain.Screen.newLine(); 
-
   }
 
-  TR.stop();
-  TL.stop();
-  BL.stop();
-  BR.stop();
-  
+  TR.setBrake(brake);
+  TL.setBrake(brake);
+  BL.setBrake(brake);
+  BR.setBrake(brake);
+
 }
 
 void translate_robot(float X_pos_inches, float Y_pos_inches) {
@@ -155,7 +159,7 @@ void translate_robot(float X_pos_inches, float Y_pos_inches) {
 
 float distance_to_wheel_rotations(float distance_) {
 
-  int rotations = (distance_ / (diameter_of_wheels * 3.14)) * 365;
+  int rotations = (distance_ / (diameter_of_wheels * 3.14)) * 360;
 
   return rotations;
 
