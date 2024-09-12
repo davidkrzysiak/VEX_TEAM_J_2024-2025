@@ -29,17 +29,17 @@ void drive_robot(float X_direction, float Y_direction, float angular_direction);
 
 void robot_auto();
 
-//these are constants of the robot so if somthing changes we just have to change it here instead of the entire code 
-
-float diameter_of_wheels = 2.75; 
-
-int angle_of_wheels = 45;
-
 //these next functions are for automatic robot movement mainly for auto but can be used for driver control if we want 
 
 void translate_robot(float X_pos_inches, float Y_pos_inches); 
 
 void rotate_robot(float theta);
+
+//these are constants of the robot so if somthing changes we just have to change it here instead of the entire code 
+
+float diameter_of_wheels = 2.75; 
+
+int angle_of_wheels = 45;
 
 //these functions are for computing valves to make code less confusing 
 
@@ -47,7 +47,7 @@ double distance_to_wheel_rotations(float distance_);
 
 int main() {
 
-  translate_robot(0,30);
+  translate_robot(20,30);
 
   while(true) {
 
@@ -154,27 +154,33 @@ void rotate_robot(float theta) {
 
 void translate_robot(float X_pos_inches, float Y_pos_inches) {
 
+  Brain.Screen.print("help");
+
   //this block moves it in the Y direction 
-
-  TR.setPosition(- distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees); 
-  TL.setPosition(distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees);
-  BL.setPosition(distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees);
-  TR.setPosition(- distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees);
-
 
   TR.spinToPosition(- distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees, false); 
   TL.spinToPosition(distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees, false);
   BL.spinToPosition(distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees, false);
-  TR.spinToPosition(- distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees, true);
+  BR.spinToPosition(- distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees, true);
 
-  
+  TR.setPosition( 0, degrees); 
+  TL.setPosition( 0, degrees);
+  BL.setPosition( 0, degrees);
+  BR.setPosition( 0, degrees);
 
   //this block moves it in the X direction
 
   TR.spinToPosition(distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, false);
   TL.spinToPosition( - distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, false);
   BL.spinToPosition( - distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, false);
-  TR.spinToPosition(distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, true);
+  BR.spinToPosition(distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, true);
+
+  TR.setPosition( 0, degrees); 
+  TL.setPosition( 0, degrees);
+  BL.setPosition( 0, degrees);
+  BR.setPosition( 0, degrees);
+
+  wait(15, seconds);
 
 }
 
