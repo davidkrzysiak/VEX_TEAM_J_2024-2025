@@ -104,7 +104,7 @@ void robot_auto() {
 
   rotate_robot(45);
 
-  //translate_robot(0, 30);
+  translate_robot(30, 30);
 
 }
 
@@ -163,7 +163,7 @@ void translate_robot(float X_pos_inches, float Y_pos_inches) {
   BL.spinToPosition(distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees, false);
   BR.spinToPosition(- distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees, true);
 
-  TR.setPosition( 0, degrees); 
+  TR.setPosition( 0, degrees);
   TL.setPosition( 0, degrees);
   BL.setPosition( 0, degrees);
   BR.setPosition( 0, degrees);
