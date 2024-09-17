@@ -47,7 +47,9 @@ double distance_to_wheel_rotations(float distance_);
 
 int main() {
 
-  translate_robot(20,30);
+  translate_robot(30,0);
+
+  rotate_robot(87);
 
   while(true) {
 
@@ -110,11 +112,11 @@ void robot_auto() {
 
 void rotate_robot(float theta) {
 
-  float P_tuning_para = .15;
+  float P_tuning_para = .2;
 
   int direction = 1; //the robot will go couterclockwise if neg and clockwise if pos 
   
-  int error = theta - Inertial5.heading(degrees);
+  float error = theta - Inertial5.heading(degrees);
 
   while (true) {
 
@@ -130,9 +132,7 @@ void rotate_robot(float theta) {
 
     error = theta - Inertial5.heading(degrees);
 
-    Brain.Screen.print(error);
-
-    if(abs(error) < 1) {
+    if(error < 0.25 && error > -0.25) {
 
       TR.stop(hold);
       TL.stop(hold);
@@ -171,16 +171,14 @@ void translate_robot(float X_pos_inches, float Y_pos_inches) {
   //this block moves it in the X direction
 
   TR.spinToPosition(distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, false);
-  TL.spinToPosition( - distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, false);
+  TL.spinToPosition(distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, false);
   BL.spinToPosition( - distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, false);
-  BR.spinToPosition(distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, true);
+  BR.spinToPosition( - distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, true);
 
   TR.setPosition( 0, degrees); 
   TL.setPosition( 0, degrees);
   BL.setPosition( 0, degrees);
   BR.setPosition( 0, degrees);
-
-  wait(15, seconds);
 
 }
 
