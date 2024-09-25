@@ -104,12 +104,29 @@ void robot_auto() {
 
     record_data = true; 
 
+
+
   }
+  //the code below is to make a complete lap around the field and hopefully end at the exact starting position
+  translate_robot(96, 0);
 
-  rotate_robot(45);
+  rotate_robot(90);
 
-  translate_robot(30, 30);
+  translate_robot (96, 0);
 
+  rotate_robot(90);
+
+  translate_robot (96, 0);
+
+  rotate_robot(90);
+
+  translate_robot (0,-6);
+
+  translate_robot (96,0);
+
+  rotate robot (90);
+
+  translate_robot (0,6)
 }
 
 void rotate_robot(float theta) {
