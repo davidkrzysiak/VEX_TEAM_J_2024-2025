@@ -10,8 +10,6 @@
 
 using namespace vex;
 
-//evelyn is here
-
 // A global instance of vex::brain used for printing to the V5 brain screen
 vex::brain       Brain;
 
@@ -27,7 +25,7 @@ vex::inertial Inertial5 = inertial(PORT5);
 
 //this could potentialy output error to do calculations
 //these are fuctions as not to clutter main 
-void drive_robot(float X_direction, float Y_direction, float angular_direction); 
+void drive_robot(); 
 
 void robot_auto();
 
@@ -49,50 +47,39 @@ double distance_to_wheel_rotations(float distance_);
 
 int main() {
 
-  translate_robot(30,0);
+  competition Competition;
 
-  rotate_robot(87);
+  Competition.drivercontrol(drive_robot);
+
+  Competition.autonomous(robot_auto);
+
+  while (true) {
+    wait(100, msec);
+  }
+
+}
+
+void drive_robot() {
 
   while(true) {
 
-    // put driver control stuff here
-    float X_input = Controller1.Axis4.position(percent);
+    float direction_coord[3] = {Controller1.Axis4.position(percent), Controller1.Axis3.position(percent), Controller1.Axis1.position(percent)};
 
-    float Y_input = Controller1.Axis3.position(percent); // =make these into array at some point 
+    // the direction_coord stores the contollers position in (X, Y, ϴ) the first position would be X second y and so on 
 
-    float theta_input = Controller1.Axis1.position(percent);
+    TR.setVelocity( direction_coord[1] - direction_coord[2] + direction_coord[3] ,percent);
+    TL.setVelocity( direction_coord[1] + direction_coord[2] + direction_coord[3] ,percent);
+    BL.setVelocity(-direction_coord[1] + direction_coord[2] + direction_coord[3] ,percent);
+    BR.setVelocity(-direction_coord[1] - direction_coord[2] + direction_coord[3] ,percent);
 
-    drive_robot(X_input, Y_input, theta_input);
+    TR.spin(forward);
+    TL.spin(forward);
+    BL.spin(forward);
+    BR.spin(forward);
 
-    // eventually we'll use the other fancy robot call functions
-
-    //this is cause i have no controller change it to == if there is a controler or need to test driver control 
-
-    if(Controller1.ButtonA.pressing() == true) { 
-      
-      Inertial5.calibrate();
-
-      wait(5, seconds); 
-      
-      robot_auto();
-
-    }
 
   }
-  
-}
 
-void drive_robot(float X_direction, float Y_direction, float angular_direction) {
-
-  TR.setVelocity(X_direction - Y_direction + angular_direction ,percent);
-  TL.setVelocity(X_direction + Y_direction + angular_direction ,percent);
-  BL.setVelocity(-X_direction + Y_direction + angular_direction ,percent);
-  BR.setVelocity(-X_direction - Y_direction + angular_direction ,percent);
-
-  TR.spin(forward);
-  TL.spin(forward);
-  BL.spin(forward);
-  BR.spin(forward);
 
 }
 
@@ -104,34 +91,17 @@ void robot_auto() {
 
     record_data = true; 
 
-
-
   }
-  //the code below is to make a complete lap around the field and hopefully end at the exact starting position
-  translate_robot(96, 0);
 
-  rotate_robot(90);
+  rotate_robot(45);
 
-  translate_robot (96, 0);
+  translate_robot(30, 30);
 
-  rotate_robot(90);
-
-  translate_robot (96, 0);
-
-  rotate_robot(90);
-
-  translate_robot (0,-6);
-
-  translate_robot (96,0);
-
-  rotate robot (90);
-
-  translate_robot (0,6)
 }
 
 void rotate_robot(float theta) {
 
-  float P_tuning_para = .2;
+  float P_tuning_para = .3;
 
   int direction = 1; //the robot will go couterclockwise if neg and clockwise if pos 
   
