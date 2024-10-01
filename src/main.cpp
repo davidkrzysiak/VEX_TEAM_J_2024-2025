@@ -63,14 +63,14 @@ void drive_robot() {
 
   while(true) {
 
-    float direction_coord[3] = {Controller1.Axis4.position(percent), Controller1.Axis3.position(percent), Controller1.Axis1.position(percent)};
+    float direction_coord[2] = {Controller1.Axis4.position(percent), Controller1.Axis3.position(percent), Controller1.Axis1.position(percent)};
 
     // the direction_coord stores the contollers position in (X, Y, ϴ) the first position would be X second y and so on 
 
-    TR.setVelocity( direction_coord[1] - direction_coord[2] + direction_coord[3] ,percent);
-    TL.setVelocity( direction_coord[1] + direction_coord[2] + direction_coord[3] ,percent);
-    BL.setVelocity(-direction_coord[1] + direction_coord[2] + direction_coord[3] ,percent);
-    BR.setVelocity(-direction_coord[1] - direction_coord[2] + direction_coord[3] ,percent);
+    TR.setVelocity( direction_coord[0] - direction_coord[1] + direction_coord[2] ,percent);
+    TL.setVelocity( direction_coord[0] + direction_coord[1] + direction_coord[2] ,percent);
+    BL.setVelocity(-direction_coord[0] + direction_coord[1] + direction_coord[2] ,percent);
+    BR.setVelocity(-direction_coord[0] - direction_coord[1] + direction_coord[2] ,percent);
 
     TR.spin(forward);
     TL.spin(forward);
