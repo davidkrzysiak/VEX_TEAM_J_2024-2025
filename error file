@@ -1,0 +1,24 @@
+windows build for platform vexv5
+"CXX src/main.cpp"
+src/main.cpp:66:33: error: non-constant-expression cannot be narrowed from type 'int32_t' (aka 'long') to 'float' in initializer list [-Wc++11-narrowing]
+    float direction_coord[2] = {Controller1.Axis4.position(percent), Controller1.Axis3.position(percent), Controller1.Axis1.position(percent)};
+                                ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+src/main.cpp:66:33: note: insert an explicit cast to silence this issue
+    float direction_coord[2] = {Controller1.Axis4.position(percent), Controller1.Axis3.position(percent), Controller1.Axis1.position(percent)};
+                                ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                static_cast<float>(                )
+src/main.cpp:66:70: error: non-constant-expression cannot be narrowed from type 'int32_t' (aka 'long') to 'float' in initializer list [-Wc++11-narrowing]
+    float direction_coord[2] = {Controller1.Axis4.position(percent), Controller1.Axis3.position(percent), Controller1.Axis1.position(percent)};
+                                                                     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+src/main.cpp:66:70: note: insert an explicit cast to silence this issue
+    float direction_coord[2] = {Controller1.Axis4.position(percent), Controller1.Axis3.position(percent), Controller1.Axis1.position(percent)};
+                                                                     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                                                     static_cast<float>(                )
+src/main.cpp:66:107: error: excess elements in array initializer
+    float direction_coord[2] = {Controller1.Axis4.position(percent), Controller1.Axis3.position(percent), Controller1.Axis1.position(percent)};
+                                                                                                          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+3 errors generated.
+
+make: *** [vex/mkrules.mk:13: build/src/main.o] Error 1
+
+Make process closed with exit code: 2
