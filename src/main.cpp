@@ -95,7 +95,7 @@ void robot_auto() {
 
   rotate_robot(45);
 
-  translate_robot(30, 30);
+  translate_robot(5, 5);
 
 }
 
@@ -145,6 +145,11 @@ void translate_robot(float X_pos_inches, float Y_pos_inches) {
 
   Brain.Screen.print("help");
 
+  TR.setPosition( 0, degrees); 
+  TL.setPosition( 0, degrees);
+  BL.setPosition( 0, degrees);
+  BR.setPosition( 0, degrees);
+
   //this block moves it in the Y direction 
 
   TR.spinToPosition(- distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees, false); 
@@ -163,11 +168,6 @@ void translate_robot(float X_pos_inches, float Y_pos_inches) {
   TL.spinToPosition(distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, false);
   BL.spinToPosition( - distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, false);
   BR.spinToPosition( - distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, true);
-
-  TR.setPosition( 0, degrees); 
-  TL.setPosition( 0, degrees);
-  BL.setPosition( 0, degrees);
-  BR.setPosition( 0, degrees);
 
 }
 

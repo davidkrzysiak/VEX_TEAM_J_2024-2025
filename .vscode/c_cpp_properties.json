@@ -23,10 +23,7 @@
 				"_DEBUG",
 				"UNICODE",
 				"_UNICODE"
-			],
-			"cStandard": "c17",
-			"cppStandard": "c++14",
-			"intelliSenseMode": "windows-clang-x86"
+			]
 		}
 	],
 	"version": 4
