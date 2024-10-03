@@ -63,7 +63,7 @@ void drive_robot() {
 
   while(true) {
 
-    float direction_coord[2] = {Controller1.Axis4.position(percent), Controller1.Axis3.position(percent), Controller1.Axis1.position(percent)};
+    float direction_coord[3] = {Controller1.Axis4.position(percent), Controller1.Axis3.position(percent), Controller1.Axis1.position(percent)};
 
     // the direction_coord stores the contollers position in (X, Y, ϴ) the first position would be X second y and so on 
 
