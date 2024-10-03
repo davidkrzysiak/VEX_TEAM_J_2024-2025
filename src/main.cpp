@@ -6,7 +6,17 @@
 /*    Description:  V5 project                                                */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
-#include "vex.h"
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+
+#include "v5.h"
+#include "v5_vcs.h"
+
+
+//#include "vex.h"
 
 using namespace vex;
 
@@ -47,6 +57,8 @@ double distance_to_wheel_rotations(float distance_);
 
 int main() {
 
+  translate_robot(10, 10);
+
   competition Competition;
 
   Competition.drivercontrol(drive_robot);
@@ -63,7 +75,7 @@ void drive_robot() {
 
   while(true) {
 
-    float direction_coord[3] = {Controller1.Axis4.position(percent), Controller1.Axis3.position(percent), Controller1.Axis1.position(percent)};
+    long direction_coord[3] = {Controller1.Axis4.position(percent), Controller1.Axis3.position(percent), Controller1.Axis1.position(percent)};
 
     // the direction_coord stores the contollers position in (X, Y, ϴ) the first position would be X second y and so on 
 
@@ -95,13 +107,13 @@ void robot_auto() {
 
   rotate_robot(45);
 
-  translate_robot(5, 5);
+  translate_robot(10, 10);
 
 }
 
 void rotate_robot(float theta) {
 
-  float P_tuning_para = .3;
+  float P_tuning_para = .4;
 
   int direction = 1; //the robot will go couterclockwise if neg and clockwise if pos 
   
@@ -121,7 +133,7 @@ void rotate_robot(float theta) {
 
     error = theta - Inertial5.heading(degrees);
 
-    if(error < 0.25 && error > -0.25) {
+    if(error < 0.4 && error > -0.4) {
 
       TR.stop(hold);
       TL.stop(hold);
@@ -143,31 +155,14 @@ void rotate_robot(float theta) {
 
 void translate_robot(float X_pos_inches, float Y_pos_inches) {
 
-  Brain.Screen.print("help");
+  double distancce_rightward = (Y_pos_inches + X_pos_inches)/sqrt(2);
+  float distancce_leftward = (Y_pos_inches - X_pos_inches)/sqrt(2);    // this is the mathamatics to transform X,Y coords to 45 degree perp lines
 
-  TR.setPosition( 0, degrees); 
-  TL.setPosition( 0, degrees);
-  BL.setPosition( 0, degrees);
-  BR.setPosition( 0, degrees);
-
-  //this block moves it in the Y direction 
-
-  TR.spinToPosition(- distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees, false); 
-  TL.spinToPosition(distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees, false);
-  BL.spinToPosition(distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees, false);
-  BR.spinToPosition(- distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees, true);
-
-  TR.setPosition( 0, degrees);
-  TL.setPosition( 0, degrees);
-  BL.setPosition( 0, degrees);
-  BR.setPosition( 0, degrees);
-
-  //this block moves it in the X direction
-
-  TR.spinToPosition(distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, false);
-  TL.spinToPosition(distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, false);
-  BL.spinToPosition( - distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, false);
-  BR.spinToPosition( - distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, true);
+  move_rightward(distance_to_wheel_rotations(distancce_rightward));
+  
+  move_leftward(distance_to_wheel_rotations(distancce_leftward));
+  
+  
 
 }
 
@@ -176,5 +171,17 @@ double distance_to_wheel_rotations(float distance_) {
   double degrees = (distance_ / (diameter_of_wheels * 3.14)) * 360;
 
   return degrees;
+
+}
+
+void move_rightward(distance) {
+
+
+
+}
+
+void move_leftward(distance) {
+
+
 
 }
