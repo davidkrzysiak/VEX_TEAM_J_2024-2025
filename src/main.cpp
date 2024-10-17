@@ -45,6 +45,10 @@ void translate_robot(float X_pos_inches, float Y_pos_inches);
 
 void rotate_robot(float theta);
 
+double move_rightward(double distance);
+
+void move_leftward(double distance);
+
 //these are constants of the robot so if somthing changes we just have to change it here instead of the entire code 
 
 float diameter_of_wheels = 2.75; 
@@ -57,13 +61,17 @@ double distance_to_wheel_rotations(float distance_);
 
 int main() {
 
-  translate_robot(10, 10);
+  translate_robot(110, 110);
 
-  competition Competition;
+  translate_robot(-110, -100);
 
-  Competition.drivercontrol(drive_robot);
+  //rotate_robot(60);
 
-  Competition.autonomous(robot_auto);
+  //competition Competition;
+
+ // Competition.drivercontrol(drive_robot);
+
+ // Competition.autonomous(robot_auto);
 
   while (true) {
     wait(100, msec);
@@ -155,14 +163,31 @@ void rotate_robot(float theta) {
 
 void translate_robot(float X_pos_inches, float Y_pos_inches) {
 
-  double distancce_rightward = (Y_pos_inches + X_pos_inches)/sqrt(2);
-  float distancce_leftward = (Y_pos_inches - X_pos_inches)/sqrt(2);    // this is the mathamatics to transform X,Y coords to 45 degree perp lines
+  Brain.Screen.print("help");
 
-  move_rightward(distance_to_wheel_rotations(distancce_rightward));
-  
-  move_leftward(distance_to_wheel_rotations(distancce_leftward));
-  
-  
+  TR.setPosition( 0, degrees); 
+  TL.setPosition( 0, degrees);
+  BL.setPosition( 0, degrees);
+  BR.setPosition( 0, degrees);
+
+  //this block moves it in the Y direction 
+
+  TR.spinToPosition(- distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees, false); 
+  TL.spinToPosition(distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees, false);
+  BL.spinToPosition(distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees, false);
+  BR.spinToPosition(- distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees, true);
+
+  TR.setPosition( 0, degrees);
+  TL.setPosition( 0, degrees);
+  BL.setPosition( 0, degrees);
+  BR.setPosition( 0, degrees);
+
+  //this block moves it in the X direction
+
+  TR.spinToPosition(distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, false);
+  TL.spinToPosition(distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, false);
+  BL.spinToPosition( - distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, false);
+  BR.spinToPosition( - distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, true);
 
 }
 
@@ -174,13 +199,15 @@ double distance_to_wheel_rotations(float distance_) {
 
 }
 
-void move_rightward(distance) {
+double move_rightward(double distance) {
 
 
+
+  return 1;
 
 }
 
-void move_leftward(distance) {
+void move_leftward(double distance) {
 
 
 
