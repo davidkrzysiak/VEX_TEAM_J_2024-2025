@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <iostream>
 
 #include "v5.h"
 #include "v5_vcs.h"
@@ -31,6 +31,7 @@ vex::motor TL = motor(PORT2, ratio6_1, false);
 vex::motor BL = motor(PORT3, ratio6_1, false);
 vex::motor BR = motor(PORT4, ratio6_1, false);
 vex::inertial Inertial5 = inertial(PORT5);
+vex::motor Clamp_motor = motor(PORT6, ratio36_1, false);
 
 
 //this could potentialy output error to do calculations
@@ -45,9 +46,9 @@ void translate_robot(float X_pos_inches, float Y_pos_inches);
 
 void rotate_robot(float theta);
 
-double move_rightward(double distance);
+void move_rightward(float distance_to_target);
 
-void move_leftward(double distance);
+void move_leftward(float distance_to_target);
 
 //these are constants of the robot so if somthing changes we just have to change it here instead of the entire code 
 
@@ -55,17 +56,13 @@ float diameter_of_wheels = 2.75;
 
 int angle_of_wheels = 45;
 
+float max_motor_voltage = 11.5;
+
 //these functions are for computing valves to make code less confusing 
 
 double distance_to_wheel_rotations(float distance_);
 
 int main() {
-
-  translate_robot(110, 110);
-
-  translate_robot(-110, -100);
-
-  //rotate_robot(60);
 
   //competition Competition;
 
@@ -97,9 +94,21 @@ void drive_robot() {
     BL.spin(forward);
     BR.spin(forward);
 
+    Clamp_motor.setBrake(brake);
+
+    if( Controller1.ButtonR1.pressing() == true ) {
+
+      Clamp_motor.spinToPosition(Clamp_motor.position(degrees) + 2, degrees);
+
+    }
+
+    if( Controller1.ButtonL1.pressing() == true ) {
+
+      Clamp_motor.spinToPosition(Clamp_motor.position(degrees) - 2, degrees);
+
+    }
 
   }
-
 
 }
 
@@ -113,9 +122,11 @@ void robot_auto() {
 
   }
 
-  rotate_robot(45);
+  //rotate_robot(45);
 
-  translate_robot(10, 10);
+  translate_robot(10, 15);
+
+  Brain.Screen.print("done");
 
 }
 
@@ -163,52 +174,127 @@ void rotate_robot(float theta) {
 
 void translate_robot(float X_pos_inches, float Y_pos_inches) {
 
-  Brain.Screen.print("help");
+  double distancce_rightward = (Y_pos_inches + X_pos_inches)/sqrt(2);
+  double distancce_leftward = (Y_pos_inches - X_pos_inches)/sqrt(2);    // this is the mathamatics to transform X,Y coords to 45 degree perp lines
 
-  TR.setPosition( 0, degrees); 
-  TL.setPosition( 0, degrees);
-  BL.setPosition( 0, degrees);
-  BR.setPosition( 0, degrees);
-
-  //this block moves it in the Y direction 
-
-  TR.spinToPosition(- distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees, false); 
-  TL.spinToPosition(distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees, false);
-  BL.spinToPosition(distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees, false);
-  BR.spinToPosition(- distance_to_wheel_rotations(Y_pos_inches) * .707 , degrees, true);
-
-  TR.setPosition( 0, degrees);
-  TL.setPosition( 0, degrees);
-  BL.setPosition( 0, degrees);
-  BR.setPosition( 0, degrees);
-
-  //this block moves it in the X direction
-
-  TR.spinToPosition(distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, false);
-  TL.spinToPosition(distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, false);
-  BL.spinToPosition( - distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, false);
-  BR.spinToPosition( - distance_to_wheel_rotations(X_pos_inches) * .707 , degrees, true);
-
+  move_rightward((distance_to_wheel_rotations(distancce_rightward)));
+  
+  move_leftward((distance_to_wheel_rotations(distancce_leftward)));
+  
 }
 
 double distance_to_wheel_rotations(float distance_) {
 
-  double degrees = (distance_ / (diameter_of_wheels * 3.14)) * 360;
+  double degrees = (distance_ / (diameter_of_wheels * 3.14)) * 360;        // this might explode and we'll nmeed to change a bunch of stuff to doubles
 
   return degrees;
 
 }
 
-double move_rightward(double distance) {
+void move_rightward(float distance_to_target) {
 
+  TL.setPosition(0, degrees);
+  BR.setPosition(0, degrees);
 
+  float error = distance_to_target; 
 
-  return 1;
+  float P_param = 0.007;
+  float I_param = 0.000001;
+  float D_param = 0.000003;
+
+  float voltage_to_motor = 0;
+
+  float error_accumalate = 0;
+
+  float error_previous = error;
+
+  while (true) {
+
+    //float wheel_pos = (TL.position(degrees) + -(BR.position(degrees))) / 2;
+
+    float wheel_pos = TL.position(degrees);
+    
+    error = distance_to_target - wheel_pos; 
+
+    voltage_to_motor = D_param * (error - error_previous);
+
+    error_previous = error; 
+
+    voltage_to_motor = voltage_to_motor  + (P_param * (error)) + (I_param * (error_accumalate));
+
+    error_accumalate = error_accumalate + error;
+
+    if ( voltage_to_motor > max_motor_voltage ) {
+
+      voltage_to_motor = max_motor_voltage;
+
+    }
+
+    TL.spin(forward, voltage_to_motor, volt);
+    BR.spin(reverse, voltage_to_motor, volt);
+
+    if (error < 2 && error > -2) {
+      break;
+    }
+
+  }
+
+  TL.spin(forward, 0, volt);
+  BR.spin(reverse, 0, volt);
+
 
 }
 
-void move_leftward(double distance) {
+void move_leftward(float distance_to_target) {
+
+  TR.setPosition(0, degrees);
+  BL.setPosition(0, degrees);
+
+  float error = distance_to_target; 
+
+  float P_param = 0.007;
+  float I_param = 0.000001;
+  float D_param = 0.000003;
+
+  float voltage_to_motor = 0;
+
+  float error_accumalate = error;
+
+  float error_previous = error;
+
+  while (true) {
 
 
+    //float wheel_pos = (-(TR.position(degrees)) + BL.position(degrees)) / 2;
+
+    float wheel_pos = -TR.position(degrees);
+    
+    error = distance_to_target - wheel_pos; 
+
+    voltage_to_motor = D_param * (error - error_previous);
+
+    error_previous = error; 
+
+    voltage_to_motor = voltage_to_motor  + (P_param * (error)) + (I_param * (error_accumalate));
+
+    error_accumalate = error_accumalate + error;
+
+    if ( voltage_to_motor > max_motor_voltage ) {
+
+      voltage_to_motor = max_motor_voltage;
+
+    }
+
+    TR.spin(reverse, voltage_to_motor, volt);
+    BL.spin(forward, voltage_to_motor, volt);
+
+    if (error < 2 && error > -2) {
+      break;
+    }
+
+  }
+
+  TR.spin(reverse, 0, volt);
+  BL.spin(forward, 0, volt);
 
 }
