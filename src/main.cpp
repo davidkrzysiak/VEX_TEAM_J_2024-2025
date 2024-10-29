@@ -103,13 +103,14 @@ void drive_robot() {
     BL.spin(forward);
     BR.spin(forward);
 
-    Clamp_motor.setBrake(brake);
+    Clamp_motor.setBrake(hold);
 
     if( Controller1.ButtonR1.pressing() == true ) {
 
       Clamp_motor.spinToPosition(Clamp_motor.position(degrees) + 6, degrees);
 
     }
+    else { Clamp_motor.stop() ;}
 
     if( Controller1.ButtonL1.pressing() == true ) {
 
@@ -245,9 +246,9 @@ void move_rightward() {
   Brain.Screen.print(distancce_rightward);
   Brain.Screen.newLine();
 
-  float P_param = 0.02;
-  float I_param = 0.000000005;
-  float D_param = 0.00006;
+  float P_param = 0.025;
+  float I_param = 0.000000001;
+  float D_param = 0.00015;
 
   float voltage_to_motor = 0;
 
@@ -280,7 +281,7 @@ void move_rightward() {
     TL.spin(forward, voltage_to_motor, volt);
     BR.spin(reverse, voltage_to_motor, volt);
 
-    if (error < 2 && error > -2) {
+    if (error < 4 && error > -4) {
       break;
     }
     
@@ -302,9 +303,9 @@ void move_leftward() {
   Brain.Screen.print(distancce_leftward);
   Brain.Screen.newLine();
 
-  float P_param = 0.02;
-  float I_param = 0.000000005;
-  float D_param = 0.00006;
+  float P_param = 0.025;
+  float I_param = 0.000000001;
+  float D_param = 0.00015;
 
   float voltage_to_motor = 0;
 
@@ -338,13 +339,13 @@ void move_leftward() {
     TR.spin(reverse, voltage_to_motor, volt);
     BL.spin(forward, voltage_to_motor, volt);
 
-    if (error < 2 && error > -2) {
+    if (error < 4 && error > -4) {
       break;
     }
 
   }
 
-  TR.spin(reverse, 0, volt);
-  BL.spin(forward, 0, volt);
+  TR.stop();
+  BL.stop();
 
 }
