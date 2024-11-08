@@ -34,7 +34,6 @@ vex::motor BR = motor(PORT4, ratio6_1, false);
 vex::inertial Inertial5 = inertial(PORT5);
 vex::motor Clamp_motor = motor(PORT6, ratio36_1, false);
 vex::motor intake_motor = motor(PORT12, ratio6_1, false);
-vex::motor spinny_screw = motor(PORT13, ratio18_1, false);
 
 //this could potentialy output error to do calculations
 //these are fuctions as not to clutter main 
@@ -46,7 +45,7 @@ void robot_auto();
 
 void translate_robot(float X_pos_inches, float Y_pos_inches); 
 
-void rotate_robot(float theta);
+void rotate_robot(float theta, int rotdirection);
 
 void move_rightward();
 
@@ -65,7 +64,9 @@ float diameter_of_wheels = 2.75;
 
 int angle_of_wheels = 45;
 
-float max_motor_voltage = 11.5;
+float max_motor_voltage = 11.7;
+
+float acceleration_constant = .25; 
 
 //these functions are for computing valves to make code less confusing 
 
@@ -103,20 +104,22 @@ void drive_robot() {
     BL.spin(forward);
     BR.spin(forward);
 
+    //clamp motor code 
+
     Clamp_motor.setBrake(hold);
 
-    if( Controller1.ButtonR1.pressing() == true ) {
+    if(Controller1.ButtonR1.pressing() == true) {
 
-      Clamp_motor.spinToPosition(Clamp_motor.position(degrees) + 6, degrees);
+      Clamp_motor.spin(forward, 12, volt);
 
-    }
-    else { Clamp_motor.stop() ;}
+    } else if(Controller1.ButtonL1.pressing() == true) {
 
-    if( Controller1.ButtonL1.pressing() == true ) {
-
-      Clamp_motor.spinToPosition(Clamp_motor.position(degrees) - 6, degrees);
+      Clamp_motor.spin(reverse, 12, volt);
 
     }
+    else { Clamp_motor.stop(); }
+
+    // intake code
 
     if( Controller1.ButtonR2.pressing() == true ) {
 
@@ -128,22 +131,7 @@ void drive_robot() {
       intake_motor.spin(forward, -12, volt);
 
     }
-    else {
-
-      intake_motor.stop();
-
-    }
-
-    if ( Controller1.ButtonA.pressing() == true) {
-
-      spinny_screw.spin(forward, 12, volt);
-
-    }
-    else {
-
-      spinny_screw.stop();
-
-    }
+    else { intake_motor.stop(); }
 
   }
 
@@ -159,22 +147,46 @@ void robot_auto() {
 
   }
 
+  //test auton on minibot comment out if not testing
+
+  //translate_robot(0, 40);
+
   //rotate_robot(300);
 
-  translate_robot(10,0);
+  //intake_motor.spin(forward, -12, volt);
+
+  translate_robot(0,-5);
+
+  Clamp_motor.spinToPosition(400, degrees, false);
+
+  wait(8, seconds);
+
+  //intake_motor.stop();
+
+  rotate_robot(222, 1);  
+
+  //intake_motor.spin(forward, -12, volt);
+
+  translate_robot(0,-25);
+
+  Clamp_motor.spinToPosition(0, degrees);
+
+  translate_robot(0,30);
+
+  //intake_motor.stop();
 
   Brain.Screen.print("done");
 
 }
 
-void rotate_robot(float theta) {
+void rotate_robot(float theta, int rotdirection) {
 
   float P_tuning_para = .45;
 
-  int direction = 1; //the robot will go couterclockwise if neg and clockwise if pos 
+  int direction = rotdirection; //the robot will go couterclockwise if neg and clockwise if pos 
   
   float error = theta - Inertial5.heading(degrees);
-
+  
   while (true) {
 
     TR.setVelocity(direction * P_tuning_para * error ,percent);
@@ -214,6 +226,8 @@ void translate_robot(float X_pos_inches, float Y_pos_inches) {
   distancce_rightward = distance_to_wheel_rotations((Y_pos_inches + X_pos_inches)/sqrt(2));
   distancce_leftward = distance_to_wheel_rotations((Y_pos_inches - X_pos_inches)/sqrt(2));    // this is the mathamatics to transform X,Y coords to 45 degree perp lines
 
+  Brain.setTimer(0, seconds); 
+
   thread thread1 = thread(move_rightward);
   
   thread thread2 = thread(move_leftward);
@@ -241,13 +255,35 @@ void move_rightward() {
   TL.setPosition(0, degrees);
   BR.setPosition(0, degrees);
 
-  float error = distancce_rightward; 
+  while( TL.voltage(volt)  <  11.5 ) {
+
+    if (TL.position(degrees) < 700) {
+
+      break; 
+
+    }
+
+    TL.spin(forward, acceleration_constant * Brain.timer(seconds), volt);
+    BR.spin(forward, -acceleration_constant * Brain.timer(seconds), volt);
+
+  }
+
+  TL.spin(forward, 11.6, volt);
+  BR.spin(forward, -11.6, volt);  
+
+  while ( ((TL.position(degrees) + -(BR.position(degrees))) / 2) > 700) {
+
+    wait(.1, seconds);
+
+  }
+
+  float error = 0; 
 
   Brain.Screen.print(distancce_rightward);
   Brain.Screen.newLine();
 
-  float P_param = 0.025;
-  float I_param = 0.000000001;
+  float P_param = 0.09;
+  float I_param = 0.0000001;
   float D_param = 0.00015;
 
   float voltage_to_motor = 0;
@@ -298,13 +334,35 @@ void move_leftward() {
   TR.setPosition(0, degrees);
   BL.setPosition(0, degrees);
 
-  float error = distancce_leftward; 
+  while( TR.voltage(volt)  <  11.5 ) {
+
+    if (-TR.position(degrees) < 700) {
+
+      break; 
+
+    }
+
+    TR.spin(forward, -acceleration_constant * Brain.timer(seconds), volt);
+    BL.spin(forward, acceleration_constant * Brain.timer(seconds), volt);
+
+  }
+
+  TR.spin(forward, -11.6, volt);
+  BL.spin(forward, 11.6, volt);  
+
+  while ( ((TL.position(degrees) + -(BR.position(degrees))) / 2) > 700) {
+
+    wait(.1, seconds);
+
+  }
+
+  float error = 0; 
 
   Brain.Screen.print(distancce_leftward);
   Brain.Screen.newLine();
 
-  float P_param = 0.025;
-  float I_param = 0.000000001;
+  float P_param = 0.09;
+  float I_param = 0.0000001;
   float D_param = 0.00015;
 
   float voltage_to_motor = 0;
