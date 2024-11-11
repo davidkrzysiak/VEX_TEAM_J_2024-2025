@@ -94,6 +94,16 @@ void drive_robot() {
 
     // the direction_coord stores the contollers position in (X, Y, ϴ) the first position would be X second y and so on 
 
+    if ( Controller1.ButtonB.pressing() == true) {
+
+      float slow_down_amount = 2;
+
+      direction_coord[1] = direction_coord[1]/slow_down_amount;
+      direction_coord[2] = direction_coord[2]/slow_down_amount;
+      direction_coord[3] = direction_coord[3]/slow_down_amount;
+
+    }
+
     TR.setVelocity( direction_coord[0] - direction_coord[1] + direction_coord[2] ,percent);
     TL.setVelocity( direction_coord[0] + direction_coord[1] + direction_coord[2] ,percent);
     BL.setVelocity(-direction_coord[0] + direction_coord[1] + direction_coord[2] ,percent);
@@ -182,24 +192,37 @@ void robot_auto() {
 void rotate_robot(float theta, int rotdirection) {
 
   float P_tuning_para = .45;
-
-  int direction = rotdirection; //the robot will go couterclockwise if neg and clockwise if pos 
   
-  float error = theta - Inertial5.heading(degrees);
+  float error = 0;
+
+  float initial_heading = Inertial5.heading(degrees);
   
   while (true) {
 
-    TR.setVelocity(direction * P_tuning_para * error ,percent);
-    TL.setVelocity(direction * P_tuning_para * error ,percent);
-    BL.setVelocity(direction * P_tuning_para * error ,percent);
-    BR.setVelocity(direction * P_tuning_para * error ,percent); 
+    float degrees_turned = (Inertial5.heading(degrees) - initial_heading);
+
+    if (degrees_turned > theta) {
+
+      degrees_turned = 360 - degrees_turned;
+
+    }
+    else if (degrees_turned < 0) {
+
+      degrees_turned = degrees_turned = 360;
+
+    }
+
+    error = theta - degrees_turned;
+
+    TR.setVelocity(rotdirection * P_tuning_para * error ,percent);
+    TL.setVelocity(rotdirection * P_tuning_para * error ,percent);
+    BL.setVelocity(rotdirection * P_tuning_para * error ,percent);
+    BR.setVelocity(rotdirection * P_tuning_para * error ,percent); 
 
     TR.spin(forward);
     TL.spin(forward);
     BL.spin(forward);
     BR.spin(forward); 
-
-    error = theta - Inertial5.heading(degrees);
 
     if(error < 0.4 && error > -0.4) {
 
