@@ -36,6 +36,7 @@ vex::motor BR = motor(PORT4, ratio6_1, false);
 vex::inertial Inertial5 = inertial(PORT5);
 vex::motor Clamp_motor = motor(PORT6, ratio36_1, false);
 vex::motor intake_motor = motor(PORT12, ratio6_1, false);
+vex::bumper button = bumper(Brain.ThreeWirePort.A);
 
 //this could potentialy output error to do calculations
 //these are fuctions as not to clutter main 
@@ -156,8 +157,25 @@ void robot_auto() {
   if( Brain.SDcard.isInserted() == true ) {
 
     record_data = true; 
-
+    
   }
+   
+    TR.spin(forward, -6, volt);
+    BL.spin(forward, 6, volt);
+    TL.spin(forward, 6, volt);
+    BR.spin(forward, -6, volt);
+  
+    while (button.pressing() == false)
+    {
+      wait(10,msec);
+    }
+  
+    //If the limit switch is pressed the robot should stop moving
+    TR.stop();
+    TL.stop();
+    BR.stop();
+    BL.stop();
+   
 
   //test auton on minibot comment out if not testing
 
@@ -167,23 +185,23 @@ void robot_auto() {
 
   //intake_motor.spin(forward, -12, volt);
 
-  translate_robot(0,-5);
+  //translate_robot(0,-5);
 
-  Clamp_motor.spinToPosition(400, degrees, false);
+  //Clamp_motor.spinToPosition(400, degrees, false);
 
-  wait(8, seconds);
+  //wait(8, seconds);
 
   //intake_motor.stop();
 
-  rotate_robot(222, 1);  
+ // rotate_robot(222, 1);  
 
   //intake_motor.spin(forward, -12, volt);
 
-  translate_robot(0,-25);
+  //translate_robot(0,-25);
 
-  Clamp_motor.spinToPosition(0, degrees);
+ // Clamp_motor.spinToPosition(0, degrees);
 
-  translate_robot(0,30);
+  //translate_robot(0,30);
 
   //intake_motor.stop();
 
@@ -397,7 +415,6 @@ void move_leftward() {
   float error_previous = error;
 
   while (true) {
-
 
     float wheel_pos = (-(TR.position(degrees)) + BL.position(degrees)) / 2;
 
