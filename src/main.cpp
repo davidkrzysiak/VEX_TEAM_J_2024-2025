@@ -16,8 +16,6 @@
 #include "v5.h"
 #include "v5_vcs.h"
 
-// hey this is evelyns computer this is a test 
-
 
 //#include "vex.h"
 
@@ -36,7 +34,6 @@ vex::motor BR = motor(PORT4, ratio6_1, false);
 vex::inertial Inertial5 = inertial(PORT5);
 vex::motor Clamp_motor = motor(PORT6, ratio36_1, false);
 vex::motor intake_motor = motor(PORT12, ratio6_1, false);
-vex::bumper button = bumper(Brain.ThreeWirePort.A);
 
 //this could potentialy output error to do calculations
 //these are fuctions as not to clutter main 
@@ -75,6 +72,8 @@ float acceleration_constant = .25;
 
 double distance_to_wheel_rotations(float distance_);
 
+//float Robot_position_absolute();
+
 int main() {
 
   competition Competition;
@@ -96,16 +95,6 @@ void drive_robot() {
     long direction_coord[3] = {Controller1.Axis4.position(percent), Controller1.Axis3.position(percent), Controller1.Axis1.position(percent)};
 
     // the direction_coord stores the contollers position in (X, Y, ϴ) the first position would be X second y and so on 
-
-    if ( Controller1.ButtonB.pressing() == true) {
-
-      float slow_down_amount = 2;
-
-      direction_coord[1] = direction_coord[1]/slow_down_amount;
-      direction_coord[2] = direction_coord[2]/slow_down_amount;
-      direction_coord[3] = direction_coord[3]/slow_down_amount;
-
-    }
 
     TR.setVelocity( direction_coord[0] - direction_coord[1] + direction_coord[2] ,percent);
     TL.setVelocity( direction_coord[0] + direction_coord[1] + direction_coord[2] ,percent);
@@ -157,110 +146,87 @@ void robot_auto() {
   if( Brain.SDcard.isInserted() == true ) {
 
     record_data = true; 
-    
+
   }
-   
-    TR.spin(forward, -6, volt);
-    BL.spin(forward, 6, volt);
-    TL.spin(forward, 6, volt);
-    BR.spin(forward, -6, volt);
-  
-    while (button.pressing() == false)
-    {
-      wait(10,msec);
-    }
-  
-    //If the limit switch is pressed the robot should stop moving
-    TR.stop();
-    TL.stop();
-    BR.stop();
-    BL.stop();
-   
 
   //test auton on minibot comment out if not testing
 
-  //translate_robot(0, 40);
 
-  //rotate_robot(300);
 
-  //intake_motor.spin(forward, -12, volt);
-
-  //translate_robot(0,-5);
-
-  //Clamp_motor.spinToPosition(400, degrees, false);
-
-  //wait(8, seconds);
-
-  //intake_motor.stop();
-
- // rotate_robot(222, 1);  
-
-  //intake_motor.spin(forward, -12, volt);
-
-  //translate_robot(0,-25);
-
- // Clamp_motor.spinToPosition(0, degrees);
-
-  //translate_robot(0,30);
-
-  //intake_motor.stop();
-
-  Brain.Screen.print("done");
+  
 
 }
 
 void rotate_robot(float theta, int rotdirection) {
 
-  float P_tuning_para = .45;
-  
+  float P_tuning_para = .15;
+
   float error = 0;
 
-  float initial_heading = Inertial5.heading(degrees);
-  
-  while (true) {
+  Inertial5.resetHeading();
 
-    float degrees_turned = (Inertial5.heading(degrees) - initial_heading);
+  if ( rotdirection == 1 ) {
 
-    if (degrees_turned > theta) {
+    float error = theta - Inertial5.heading(degrees);
 
-      degrees_turned = 360 - degrees_turned;
+    if ( error < 0 ) {
 
-    }
-    else if (degrees_turned < 0) {
-
-      degrees_turned = degrees_turned = 360;
+      error = theta;
 
     }
 
-    error = theta - degrees_turned;
+    while(true){
 
-    TR.setVelocity(rotdirection * P_tuning_para * error ,percent);
-    TL.setVelocity(rotdirection * P_tuning_para * error ,percent);
-    BL.setVelocity(rotdirection * P_tuning_para * error ,percent);
-    BR.setVelocity(rotdirection * P_tuning_para * error ,percent); 
+      TR.spin(forward, error * P_tuning_para, volt );
+      TL.spin(forward, error * P_tuning_para, volt ); 
+      BR.spin(forward, error * P_tuning_para, volt );
+      BL.spin(forward, error * P_tuning_para, volt );
 
-    TR.spin(forward);
-    TL.spin(forward);
-    BL.spin(forward);
-    BR.spin(forward); 
+      error = theta - Inertial5.heading();
 
-    if(error < 0.4 && error > -0.4) {
+      if (error < 0.5 && error > -0.5) {
 
-      TR.stop(hold);
-      TL.stop(hold);
-      BL.stop(hold);
-      BR.stop(hold);
+        TR.stop(hold);
+        TL.stop(hold);
+        BR.stop(hold);
+        BL.stop(hold);
 
-      break;
+        break;
+
+      }
+
+    }
+    
+  }
+  else {
+
+    theta = 360 - theta; 
+
+    float error = -(theta - Inertial5.heading(degrees)); 
+
+    while(true){
+
+      TR.spin(forward, error * P_tuning_para, volt );
+      TL.spin(forward, error * P_tuning_para, volt ); 
+      BR.spin(forward, error * P_tuning_para, volt );
+      BL.spin(forward, error * P_tuning_para, volt );
+
+      error = -(theta - Inertial5.heading());
+
+      if (error < 0.5 && error > -0.5) {
+
+        TR.stop(hold);
+        TL.stop(hold);
+        BR.stop(hold);
+        BL.stop(hold);
+
+        break;
+
+      }
 
     }
 
   }
-
-  TR.setBrake(brake);
-  TL.setBrake(brake);
-  BL.setBrake(brake);
-  BR.setBrake(brake);
 
 }
 
@@ -274,6 +240,8 @@ void translate_robot(float X_pos_inches, float Y_pos_inches) {
   thread thread1 = thread(move_rightward);
   
   thread thread2 = thread(move_leftward);
+
+  //add thread to control the rotation so it stays constant 
 
   wait(.5, seconds);
 
@@ -416,6 +384,7 @@ void move_leftward() {
 
   while (true) {
 
+
     float wheel_pos = (-(TR.position(degrees)) + BL.position(degrees)) / 2;
 
     //float wheel_pos = -TR.position(degrees);
@@ -449,3 +418,11 @@ void move_leftward() {
   BL.stop();
 
 }
+
+//float Robot_position_absolute() {
+
+
+ 
+
+
+//}

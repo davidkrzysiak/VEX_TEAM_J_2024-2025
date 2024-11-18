@@ -6,11 +6,11 @@
 	"project": {
 		"name": "VEX_TEAM_J_2024-2025",
 		"description": "",
-		"creationDate": "9/3/2024, 11:22:36 PM",
+		"creationDate": "Mon, 18 Nov 2024 21:56:14 GMT",
 		"platform": "V5",
 		"language": "cpp",
-		"slot": 1,
-		"sdkVersion": "V5_20240223_11_00_00",
+		"slot": 2,
+		"sdkVersion": "V5_20240802_15_00_00",
 		"cpp": {
 			"includePath": [],
 			"printf_float": true
