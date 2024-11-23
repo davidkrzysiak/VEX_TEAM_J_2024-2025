@@ -54,9 +54,9 @@ void move_leftward();
 // these are suppose to be in the tranlates function but appently vex is dumb and olny does callbacks in threads
 // these are meant to be the distance the robot wants in each converted axis they will change based on the translate function 
 
-double distancce_rightward = 1000;
+double distancce_rightward = 0;
 
-double distancce_leftward = 890;
+double distancce_leftward = 0;
 
 //these are constants of the robot so if somthing changes we just have to change it here instead of the entire code 
 
@@ -149,9 +149,7 @@ void robot_auto() {
 
   }
 
-  //test auton on minibot comment out if not testing
-
-
+  translate_robot(20,47);
 
   
 
@@ -160,8 +158,6 @@ void robot_auto() {
 void rotate_robot(float theta, int rotdirection) {
 
   float P_tuning_para = .15;
-
-  float error = 0;
 
   Inertial5.resetHeading();
 
@@ -235,13 +231,17 @@ void translate_robot(float X_pos_inches, float Y_pos_inches) {
   distancce_rightward = distance_to_wheel_rotations((Y_pos_inches + X_pos_inches)/sqrt(2));
   distancce_leftward = distance_to_wheel_rotations((Y_pos_inches - X_pos_inches)/sqrt(2));    // this is the mathamatics to transform X,Y coords to 45 degree perp lines
 
+  Brain.Screen.print(distancce_leftward);
+  Brain.Screen.newLine();  
+  Brain.Screen.print(distancce_rightward);
+  Brain.Screen.newLine();
+  Brain.Screen.print("help");
+
   Brain.setTimer(0, seconds); 
 
   thread thread1 = thread(move_rightward);
   
   thread thread2 = thread(move_leftward);
-
-  //add thread to control the rotation so it stays constant 
 
   wait(.5, seconds);
 
@@ -266,25 +266,32 @@ void move_rightward() {
   TL.setPosition(0, degrees);
   BR.setPosition(0, degrees);
 
+  // the rotation reaeding and values set in terms of roatition are just to temporarly control abgle of thew robot while it's moving to prevent drift
+  Inertial5.setHeading(180, degrees);
+
   while( TL.voltage(volt)  <  11.5 ) {
 
-    if (TL.position(degrees) < 700) {
+    if (distancce_rightward - TL.position(degrees) < 700) {
 
       break; 
 
     }
 
-    TL.spin(forward, acceleration_constant * Brain.timer(seconds), volt);
-    BR.spin(forward, -acceleration_constant * Brain.timer(seconds), volt);
+    TL.spin(forward, (acceleration_constant * Brain.timer(seconds)) + (.2 * (180 - Inertial5.heading(degrees))), volt);
+    BR.spin(forward, (-acceleration_constant * Brain.timer(seconds)) + (.2 * (180 - Inertial5.heading(degrees))), volt);
 
   }
 
-  TL.spin(forward, 11.6, volt);
-  BR.spin(forward, -11.6, volt);  
+  while (true) {
 
-  while ( ((TL.position(degrees) + -(BR.position(degrees))) / 2) > 700) {
+    if (distancce_rightward - TL.position(degrees) < 700) {
 
-    wait(.1, seconds);
+      break; 
+
+    }
+
+    TL.spin(forward, 11.6 + (.2 * (180 - Inertial5.heading(degrees))), volt);
+    BR.spin(forward, -11.6 + (.2 * (180 - Inertial5.heading(degrees))), volt);  
 
   }
 
@@ -325,8 +332,8 @@ void move_rightward() {
 
     }
 
-    TL.spin(forward, voltage_to_motor, volt);
-    BR.spin(reverse, voltage_to_motor, volt);
+    TL.spin(forward, voltage_to_motor + (.2 * (180 - Inertial5.heading(degrees))), volt);
+    BR.spin(forward, (- voltage_to_motor) + (.2 * (180 - Inertial5.heading(degrees))), volt);
 
     if (error < 4 && error > -4) {
       break;
@@ -347,7 +354,7 @@ void move_leftward() {
 
   while( TR.voltage(volt)  <  11.5 ) {
 
-    if (-TR.position(degrees) < 700) {
+    if (distancce_leftward + TR.position(degrees) < 700) {
 
       break; 
 
@@ -358,12 +365,16 @@ void move_leftward() {
 
   }
 
-  TR.spin(forward, -11.6, volt);
-  BL.spin(forward, 11.6, volt);  
+  while (true) {
 
-  while ( ((TL.position(degrees) + -(BR.position(degrees))) / 2) > 700) {
+    if(distancce_leftward + TR.position(degrees) < 700) {
 
-    wait(.1, seconds);
+      break;
+
+    }
+
+    TR.spin(forward, -11.6, volt);
+    BL.spin(forward, 11.6, volt);  
 
   }
 
