@@ -34,8 +34,10 @@ vex::motor TL = motor(PORT2, ratio6_1, false);
 vex::motor BL = motor(PORT3, ratio6_1, false);
 vex::motor BR = motor(PORT4, ratio6_1, false);
 vex::inertial Inertial5 = inertial(PORT5);
-vex::motor Clamp_motor = motor(PORT6, ratio36_1, false);
 vex::motor intake_motor = motor(PORT12, ratio6_1, false);
+vex::motor intake_arm_half_motor = motor(PORT18, ratio18_1, false);
+digital_out clamp_piston1 = digital_out(Brain.ThreeWirePort.A);
+digital_out clamp_piston2 = digital_out(Brain.ThreeWirePort.B);
 
 //this could potentialy output error to do calculations
 //these are fuctions as not to clutter main 
@@ -70,6 +72,8 @@ float max_motor_voltage = 11.7;
 
 float acceleration_constant = .25; 
 
+float driver_contol_voltage_cap = 0.60;
+
 //these functions are for computing valves to make code less confusing 
 
 double distance_to_wheel_rotations(float distance_);
@@ -94,14 +98,22 @@ void drive_robot() {
 
   while(true) {
 
+    float volt_cap = driver_contol_voltage_cap;
+
     long direction_coord[3] = {Controller1.Axis4.position(percent), Controller1.Axis3.position(percent), Controller1.Axis1.position(percent)};
 
     // the direction_coord stores the contollers position in (X, Y, ϴ) the first position would be X second y and so on 
 
-    TR.setVelocity( direction_coord[0] - direction_coord[1] + direction_coord[2] ,percent);
-    TL.setVelocity( direction_coord[0] + direction_coord[1] + direction_coord[2] ,percent);
-    BL.setVelocity(-direction_coord[0] + direction_coord[1] + direction_coord[2] ,percent);
-    BR.setVelocity(-direction_coord[0] - direction_coord[1] + direction_coord[2] ,percent);
+    if (Controller1.ButtonB.pressing() == true) {
+
+      volt_cap = 1; 
+
+    }
+
+    TR.setVelocity( volt_cap * (direction_coord[0] - direction_coord[1] + direction_coord[2]) ,percent);
+    TL.setVelocity( volt_cap * (direction_coord[0] + direction_coord[1] + direction_coord[2]) ,percent);
+    BL.setVelocity( volt_cap * (-direction_coord[0] + direction_coord[1] + direction_coord[2]) ,percent);
+    BR.setVelocity( volt_cap * (-direction_coord[0] - direction_coord[1] + direction_coord[2]) ,percent);
 
     TR.spin(forward);
     TL.spin(forward);
@@ -110,32 +122,33 @@ void drive_robot() {
 
     //clamp motor code 
 
-    Clamp_motor.setBrake(hold);
-
     if(Controller1.ButtonR1.pressing() == true) {
 
-      Clamp_motor.spin(forward, 12, volt);
+     clamp_piston1.set(false);
+     clamp_piston2.set(false);
 
     } else if(Controller1.ButtonL1.pressing() == true) {
 
-      Clamp_motor.spin(reverse, 12, volt);
+     clamp_piston1.set(true);
+     clamp_piston2.set(true);
 
     }
-    else { Clamp_motor.stop(); }
 
     // intake code
 
     if( Controller1.ButtonR2.pressing() == true ) {
 
       intake_motor.spin(forward, 12, volt);
+      intake_arm_half_motor.spin(forward, 12, volt);
 
     } 
     else if( Controller1.ButtonL2.pressing() == true ) {
 
       intake_motor.spin(forward, -12, volt);
+      intake_arm_half_motor.spin(forward, -12, volt);
 
     }
-    else { intake_motor.stop(); }
+    else { intake_motor.stop(); intake_arm_half_motor.stop();}
 
   }
 
