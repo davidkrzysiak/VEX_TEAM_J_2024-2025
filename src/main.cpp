@@ -71,7 +71,7 @@ int angle_of_wheels = 45;
 
 float max_motor_voltage = 11.7;
 
-float acceleration_constant = .25; 
+float acceleration_constant = .5; 
 
 float driver_contol_voltage_cap = 0.60;
 
@@ -165,80 +165,102 @@ void robot_auto() {
 
   }
 
-  translate_robot(20,47);
+  translate_robot(0,-10);
 
-  
+  rotate_robot(120, -1);
+
+  wait(10, seconds);
+
+  translate_robot(0,12);
 
 }
 
 void rotate_robot(float theta, int rotdirection) {
 
-  float P_tuning_para = .15;
+  if (rotdirection == 1) {
 
-  Inertial5.resetHeading();
+    TR.spinToPosition(theta, degrees, false);
+    TL.spinToPosition(theta, degrees, false);
+    BR.spinToPosition(theta, degrees, false);
+    BL.spinToPosition(theta, degrees, true);
 
-  if ( rotdirection == 1 ) {
+  }
 
-    float error = theta - Inertial5.heading(degrees);
+  if (rotdirection == -1) {
 
-    if ( error < 0 ) {
+    TR.spinToPosition(-theta, degrees, false);
+    TL.spinToPosition(-theta, degrees, false);
+    BR.spinToPosition(-theta, degrees, false);
+    BL.spinToPosition(-theta, degrees, true);
 
-      error = theta;
+  }
 
-    }
+  // float P_tuning_para = .15;
 
-    while(true){
+  // Inertial5.resetHeading();
 
-      TR.spin(forward, error * P_tuning_para, volt );
-      TL.spin(forward, error * P_tuning_para, volt ); 
-      BR.spin(forward, error * P_tuning_para, volt );
-      BL.spin(forward, error * P_tuning_para, volt );
+  // if ( rotdirection == 1 ) {
 
-      error = theta - Inertial5.heading();
+  //   float error = theta - Inertial5.heading(degrees);
 
-      if (error < 0.5 && error > -0.5) {
+  //   if ( error < 0 ) {
 
-        TR.stop(hold);
-        TL.stop(hold);
-        BR.stop(hold);
-        BL.stop(hold);
+  //     error = theta;
 
-        break;
+  //   }
 
-      }
+  //   while(true){
 
-    }
+  //     TR.spin(forward, error * P_tuning_para, volt );
+  //     TL.spin(forward, error * P_tuning_para, volt ); 
+  //     BR.spin(forward, error * P_tuning_para, volt );
+  //     BL.spin(forward, error * P_tuning_para, volt );
+
+  //     error = theta - Inertial5.heading();
+
+  //     if (error < 0.5 && error > -0.5) {
+
+  //       TR.stop(hold);
+  //       TL.stop(hold);
+  //       BR.stop(hold);
+  //       BL.stop(hold);
+
+  //       break;
+
+  //     }
+
+  //   }
     
-  }
-  else {
+  // }
+  // else {
 
-    theta = 360 - theta; 
+  //   theta = 360 - theta; 
 
-    float error = -(theta - Inertial5.heading(degrees)); 
+  //   float error = -(theta - Inertial5.heading(degrees)); 
 
-    while(true){
+  //   while(true){
 
-      TR.spin(forward, error * P_tuning_para, volt );
-      TL.spin(forward, error * P_tuning_para, volt ); 
-      BR.spin(forward, error * P_tuning_para, volt );
-      BL.spin(forward, error * P_tuning_para, volt );
+  //     TR.spin(forward, error * P_tuning_para, volt );
+  //     TL.spin(forward, error * P_tuning_para, volt ); 
+  //     BR.spin(forward, error * P_tuning_para, volt );
+  //     BL.spin(forward, error * P_tuning_para, volt );
 
-      error = -(theta - Inertial5.heading());
+  //     error = -(theta - Inertial5.heading());
 
-      if (error < 0.5 && error > -0.5) {
+  //     if (error < 0.5 && error > -0.5) {
 
-        TR.stop(hold);
-        TL.stop(hold);
-        BR.stop(hold);
-        BL.stop(hold);
+  //       TR.stop(hold);
+  //       TL.stop(hold);
+  //       BR.stop(hold);
+  //       BL.stop(hold);
 
-        break;
+  //       break;
 
-      }
+  //     }
 
-    }
+  //   }
 
-  }
+  // }
 
 }
 
