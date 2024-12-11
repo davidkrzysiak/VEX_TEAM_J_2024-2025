@@ -29,10 +29,10 @@ vex::brain       Brain;
 // define your global instances of motors and other devices here
 
 vex::controller Controller1 = controller(primary);
-vex::motor TR = motor(PORT1, ratio6_1, false);
-vex::motor TL = motor(PORT2, ratio6_1, false);
-vex::motor BL = motor(PORT3, ratio6_1, false);
-vex::motor BR = motor(PORT4, ratio6_1, false);
+vex::motor TR = motor(PORT1, ratio18_1, false);
+vex::motor TL = motor(PORT2, ratio18_1, false);
+vex::motor BL = motor(PORT3, ratio18_1, false);
+vex::motor BR = motor(PORT4, ratio18_1, false);
 vex::inertial Inertial5 = inertial(PORT5);
 vex::motor intake_motor = motor(PORT12, ratio6_1, false);
 vex::motor intake_arm_half_motor = motor(PORT18, ratio18_1, false);
@@ -87,6 +87,8 @@ int main() {
   Competition.drivercontrol(drive_robot);
 
   Competition.autonomous(robot_auto);
+
+  clamp_piston1.set(false); 
 
   while (true) {
     wait(100, msec);
@@ -166,11 +168,27 @@ void robot_auto() {
 
   translate_robot(0,-10);
 
-  rotate_robot(120, -1);
+  clamp_piston1.set(true);
+
+  rotate_robot(70, -1);
 
   wait(10, seconds);
 
   translate_robot(0,12);
+
+  rotate_robot(100, 1);
+
+  translate_robot(0,6);
+
+  rotate_robot(100, -1);
+
+  translate_robot(0,6);
+
+  rotate_robot(150, 1);
+
+  translate_robot(0,12);
+
+  clamp_piston1.set(false);
 
 }
 
