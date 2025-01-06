@@ -34,8 +34,8 @@ vex::motor TL = motor(PORT2, ratio18_1, false);
 vex::motor BL = motor(PORT3, ratio18_1, false);
 vex::motor BR = motor(PORT4, ratio18_1, false);
 vex::inertial Inertial5 = inertial(PORT5);
-vex::motor intake_motor = motor(PORT12, ratio6_1, false);
-vex::motor intake_arm_half_motor = motor(PORT18, ratio18_1, false);
+vex::motor intake_motor = motor(PORT19, ratio6_1, false);
+vex::motor intake_arm_half_motor = motor(PORT18, ratio6_1, false);
 digital_out clamp_piston1 = digital_out(Brain.ThreeWirePort.A);
 digital_out clamp_piston2 = digital_out(Brain.ThreeWirePort.B);
 
@@ -166,25 +166,32 @@ void robot_auto() {
 
   }
 
-  translate_robot(0,-10);
+  clamp_piston1.set(false);
+
+  wait(1, seconds );
+
+  translate_robot(0,-12);
 
   clamp_piston1.set(true);
 
-  rotate_robot(70, -1);
+  wait(1,seconds);
 
-  wait(10, seconds);
+  rotate_robot(0.18, -1);
 
-  translate_robot(0,12);
+  intake_arm_half_motor.spin(reverse, 12, volt);
+  intake_motor.spin(reverse, 12, volt);
 
-  rotate_robot(100, 1);
+  translate_robot(0,24);
+
+  rotate_robot(2, -1);
 
   translate_robot(0,6);
 
-  rotate_robot(100, -1);
+  rotate_robot(1, -1);
 
   translate_robot(0,6);
 
-  rotate_robot(150, 1);
+  rotate_robot(2, 1);
 
   translate_robot(0,12);
 
@@ -196,19 +203,50 @@ void rotate_robot(float theta, int rotdirection) {
 
   if (rotdirection == 1) {
 
-    TR.spinToPosition(theta, degrees, false);
-    TL.spinToPosition(theta, degrees, false);
-    BR.spinToPosition(theta, degrees, false);
-    BL.spinToPosition(theta, degrees, true);
+    TR.spin(forward, 7, volt);
+    TL.spin(forward, 7, volt);
+    BR.spin(forward, 7, volt);
+    BL.spin(forward, 7, volt);
+
+    float timery = 0;
+
+    while(theta > timery) {
+
+      wait(.005, seconds);
+
+      timery = timery + .005;
+
+    }
+
+    TR.stop();
+    TL.stop();
+    BR.stop();
+    BL.stop();
 
   }
 
   if (rotdirection == -1) {
 
-    TR.spinToPosition(-theta, degrees, false);
-    TL.spinToPosition(-theta, degrees, false);
-    BR.spinToPosition(-theta, degrees, false);
-    BL.spinToPosition(-theta, degrees, true);
+    TR.spin(reverse, 7, volt);
+    TL.spin(reverse, 7, volt);
+    BR.spin(reverse, 7, volt);
+    BL.spin(reverse, 7, volt);
+
+    float timery = 0;
+
+    while(theta > timery) {
+
+      wait(.005, seconds);
+
+      timery = timery + .005;
+
+    }
+
+    TR.stop();
+    TL.stop();
+    BR.stop();
+    BL.stop();
+
 
   }
 
@@ -298,7 +336,7 @@ void translate_robot(float X_pos_inches, float Y_pos_inches) {
   
   thread thread2 = thread(move_leftward);
 
-  wait(.5, seconds);
+  wait(1, seconds);
 
   while (TR.voltage() != 0 && TL.voltage() != 0 && BR.voltage() != 0 && BL.voltage() != 0) {
 
