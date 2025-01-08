@@ -38,6 +38,18 @@ vex::motor intake_arm_half_motor = motor(PORT18, ratio6_1, false);
 digital_out clamp_piston1 = digital_out(Brain.ThreeWirePort.A);
 digital_out clamp_piston2 = digital_out(Brain.ThreeWirePort.B);
 
+struct state {
+   float pos_x;
+   float pos_y;
+   float theta;
+};
+
+struct control {
+   float velocity_x;
+   float velocity_y;
+   float omega;
+};
+
 class PIDController
 {
 private:
@@ -172,3 +184,14 @@ public:
      }
 };
 
+class Robot 
+{
+
+private:
+
+public: 
+
+
+
+
+};
