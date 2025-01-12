@@ -189,9 +189,51 @@ class Robot
 
 private:
 
+    float diameter_of_wheels = 2.75; 
+
+    int angle_of_wheels = 45;
+
+    float max_motor_voltage = 11.7;
+
+    PIDController TR_motor;
+    PIDController TL_motor;
+    PIDController BR_motor;
+    PIDController BL_motor;
+
+    void spin_the_wheels() {
+        while(true) {
+         TR.spin(forward, TR_motor.ComputePID(TR.velocity(rpm)), volt);
+         TL.spin(forward, TL_motor.ComputePID(TL.velocity(rpm)), volt);
+         BR.spin(forward, BR_motor.ComputePID(BR.velocity(rpm)), volt);
+         BL.spin(forward, BL_motor.ComputePID(BL.velocity(rpm)), volt);
+        }
+    }
+
 public: 
 
+    void drive_with_velocity( control velocity )
+    {
+        
+        TR_motor.SetSetpoint(velocity.velocity_x - velocity.velocity_y + velocity.omega);
+        TL_motor.SetSetpoint(velocity.velocity_x + velocity.velocity_y + velocity.omega);
+        BR_motor.SetSetpoint(- velocity.velocity_x - velocity.velocity_y + velocity.omega);
+        BL_motor.SetSetpoint(- velocity.velocity_x + velocity.velocity_y + velocity.omega);
 
 
+    }
 
 };
+
+int main()
+{
+
+    Robot robot;
+
+    control move;
+    move.velocity_x = 1;
+    move.velocity_y = 2;
+    move.omega = 0.5; 
+
+    robot.drive_with_velocity(move);
+
+}
