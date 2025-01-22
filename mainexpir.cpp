@@ -6,10 +6,10 @@
 /*    Description:  V5 project                                                */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
-//#include <math.h>
-//#include <stdio.h>
-//#include <stdlib.h>
-//#include <string.h>
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <iostream>
 #include <fstream>
 
@@ -23,7 +23,7 @@
 using namespace vex;
 
 // A global instance of vex::brain used for printing to the V5 brain screen
-vex::brain       Brain; 
+vex::brain       Brain;
 
 // define your global instances of motors and other devices here
 
@@ -35,8 +35,11 @@ vex::motor BR = motor(PORT4, ratio18_1, false);
 vex::inertial Inertial5 = inertial(PORT5);
 vex::motor intake_motor = motor(PORT19, ratio6_1, false);
 vex::motor intake_arm_half_motor = motor(PORT18, ratio6_1, false);
+vex::gps GPS = gps(PORT10);
 digital_out clamp_piston1 = digital_out(Brain.ThreeWirePort.A);
 digital_out clamp_piston2 = digital_out(Brain.ThreeWirePort.B);
+
+// these are some structs to control and store the robots states in a compact form
 
 struct state {
    float pos_x;
@@ -50,6 +53,8 @@ struct control {
    float omega;
 };
 
+// self explanatory
+
 class PIDController
 {
 private:
@@ -57,16 +62,21 @@ private:
      float m_kI = 0;
      float m_kD = 0;
 
+
      float m_minOutput = 0;
      float m_maxOutput = 0;
+
 
      float m_setpoint;
      float m_iAccumulator = 0;
      float m_lastError = 0;
 
+
      bool m_isEnabled = false;
 
+
      unsigned long m_previousComputeTime = 0;
+
 
 public:
      void SetGains(float _kP, float _kI, float _kD)
@@ -76,27 +86,32 @@ public:
          m_kD = _kD;
      }
 
+
      void SetSetpoint(float _setpoint)
      {
          m_setpoint = _setpoint;
      }
 
+
      float ComputePID(float _input)
      {
          static unsigned long previousComputeTime = 0;
          static unsigned long currentComputeTime;
-         currentComputeTime = timer();
+         currentComputeTime = vex::timer::system();
          float deltaTime = (currentComputeTime - previousComputeTime) / 1e6;
          float error = m_setpoint - _input;
          float pTerm = m_kP * error;
          float iTerm = m_kI * m_iAccumulator;
          float dTerm = m_kD * (error - m_lastError);
 
+
          m_iAccumulator += error * deltaTime;
          m_lastError = error;
          float output = pTerm + iTerm - dTerm;
 
+
          previousComputeTime = currentComputeTime;
+
 
          if (output > m_maxOutput)
          {
@@ -107,24 +122,29 @@ public:
              return m_minOutput;
          }
 
+
          // Serial.println("iAccumulator:\t" + (String) m_iAccumulator +"\terror:\t" + (String) m_lastError);
          return output;
      }
+
 
      float GetkP()
      {
          return m_kP;
      }
 
+
      float GetkI()
      {
          return m_kI;
      }
 
+
      float GetkD()
      {
          return m_kD;
      }
+
 
      void SetkP(float _kP)
      {
@@ -139,37 +159,44 @@ public:
          m_kD = _kD;
      }
 
+
      void SetOutputLimits(float min, float max)
      {
          m_minOutput = min;
          m_maxOutput = max;
      }
 
+
      float GetSetpoint()
      {
          return m_setpoint;
      }
+
 
      float GetLastError()
      {
          return m_lastError;
      }
 
+
      float GetIAccumulator()
      {
          return m_iAccumulator;
      }
 
+
      void ResetIAccumulator()
      {
          m_iAccumulator = 0;
-         m_previousComputeTime = timer();
+         m_previousComputeTime = vex::timer::system();
      }
+
 
      bool IsEnabled()
      {
          return m_isEnabled;
      }
+
 
      void SetEnabled(bool _isEnabled)
      {
@@ -183,57 +210,161 @@ public:
          }
      }
 };
+   
+static PIDController TR_motor;
+static PIDController TL_motor;
+static PIDController BR_motor;
+static PIDController BL_motor;
 
-class Robot 
+static state Robot_state;
+
+//robot class!!!! yay this define the things the robot can do and its parameters
+
+class Robot
 {
-
 private:
-
-    float diameter_of_wheels = 2.75; 
+   
+    float diameter_of_wheels = 2.75;
 
     int angle_of_wheels = 45;
 
     float max_motor_voltage = 11.7;
 
-    PIDController TR_motor;
-    PIDController TL_motor;
-    PIDController BR_motor;
-    PIDController BL_motor;
+    bool piston_pos = false;  
 
-    void spin_the_wheels() {
+public:
+
+    static void state_updater() {
+
+      while(true) {
+
+        Robot_state.pos_x = GPS.xPosition();
+
+        Robot_state.pos_y = GPS.yPosition();
+
+        Robot_state.theta = GPS.heading();
+    
+      }
+    }
+
+    static void spin() {
         while(true) {
-         TR.spin(forward, TR_motor.ComputePID(TR.velocity(rpm)), volt);
-         TL.spin(forward, TL_motor.ComputePID(TL.velocity(rpm)), volt);
-         BR.spin(forward, BR_motor.ComputePID(BR.velocity(rpm)), volt);
-         BL.spin(forward, BL_motor.ComputePID(BL.velocity(rpm)), volt);
+        TR.spin(forward, TR_motor.ComputePID(TR.velocity(rpm)), volt);
+        TL.spin(forward, TL_motor.ComputePID(TL.velocity(rpm)), volt);
+        BR.spin(forward, BR_motor.ComputePID(BR.velocity(rpm)), volt);
+        BL.spin(forward, BL_motor.ComputePID(BL.velocity(rpm)), volt);
         }
     }
 
-public: 
-
     void drive_with_velocity( control velocity )
     {
-        
+       
         TR_motor.SetSetpoint(velocity.velocity_x - velocity.velocity_y + velocity.omega);
         TL_motor.SetSetpoint(velocity.velocity_x + velocity.velocity_y + velocity.omega);
         BR_motor.SetSetpoint(- velocity.velocity_x - velocity.velocity_y + velocity.omega);
         BL_motor.SetSetpoint(- velocity.velocity_x + velocity.velocity_y + velocity.omega);
 
+    }
+
+    void run_intake(int direction) {
+        // the direction parameter defines which way you want it to go -1 for backwards 1 for forwards and 0 for stop 
+        //ig you put any number but it is already maxed out 
+        intake_motor.spin(forward, direction*12, volt);
+        intake_arm_half_motor.spin(forward,direction*12, volt);
 
     }
 
+    void toggle_piston(){
+
+        clamp_piston1.set(!piston_pos);
+
+        piston_pos = !piston_pos;
+
+    }
+
+    void close_piston() {
+
+        clamp_piston1.set(false);
+
+        piston_pos = false;
+
+    }
+
+    void open_piston() {
+
+        clamp_piston1.set(true);
+
+        piston_pos = true;
+       
+    }
+
+    // this will eventually turn into everything i want to display on the UI 
+    static void robot_heat() {
+
+      Controller1.Screen.clearScreen();
+
+      // Print all motor temperatures in one line
+      Controller1.Screen.setCursor(1, 1); // Set cursor to the first line
+     
+      Controller1.Screen.print("T%.1f T%.1f B%.1f B%.1f",TR.temperature(temperatureUnits::celsius), TL.temperature(temperatureUnits::celsius), BR.temperature(temperatureUnits::celsius), BL.temperature(temperatureUnits::celsius));
+
+    }
 };
+
+//created robot object
+
+Robot robot;
+
+void drive_robot() {
+
+    while(true) {
+
+        control driver_direction;
+        driver_direction.velocity_x = Controller1.Axis4.position();
+        driver_direction.velocity_y = Controller1.Axis3.position();
+        driver_direction.omega = Controller1.Axis1.position();
+
+        robot.drive_with_velocity(driver_direction);
+
+        if (Controller1.ButtonR1.pressing() == true) {
+          robot.toggle_piston();
+        }
+
+        if(Controller1.ButtonR2.pressing() == true) {
+            robot.run_intake(1);
+        } else if(Controller1.ButtonL2.pressing() == true) {
+            robot.run_intake(-1);
+        } else {
+            robot.run_intake(0);
+        }
+    }
+}
 
 int main()
 {
+   
+    // these two thread are for programs that run cuntiniously
 
-    Robot robot;
+    vex::thread spinnythread = vex::thread(Robot::spin);
 
-    control move;
-    move.velocity_x = 1;
-    move.velocity_y = 2;
-    move.omega = 0.5; 
+    vex::thread statethready = vex::thread(Robot::state_updater);
 
-    robot.drive_with_velocity(move);
+    vex::thread screen_ui_updater = vex::thread(robot.robot_heat);
+   
+    //set the gains of the PID
+
+    TR_motor.SetGains(1,1,1);
+    TL_motor.SetGains(1,1,1);
+    BR_motor.SetGains(1,1,1);
+    BL_motor.SetGains(1,1,1);
+
+    // this is where the robot starts
+
+    competition Competition;
+
+    Competition.drivercontrol(drive_robot);
+
+   // Competition.autonomous();
 
 }
+
