@@ -6,33 +6,27 @@
 /*    Description:  V5 project                                                */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
-#include<math.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <iostream>
 #include <fstream>
+#include <list>
 
-
-#include "v5.h"
-#include "v5_vcs.h"
-
+//#include "v5.h"
+//#include "v5_vcs.h"
 
 //expiremal branch init commit
 
-
-//#include "vex.h"
-
+#include "vex.h"
 
 using namespace vex;
-
 
 // A global instance of vex::brain used for printing to the V5 brain screen
 vex::brain       Brain;
 
-
 // define your global instances of motors and other devices here
-
 
 vex::controller Controller1 = controller(primary);
 vex::motor TR = motor(PORT1, ratio18_1, false);
@@ -42,33 +36,280 @@ vex::motor BR = motor(PORT4, ratio18_1, false);
 vex::inertial Inertial5 = inertial(PORT5);
 vex::motor intake_motor = motor(PORT19, ratio6_1, false);
 vex::motor intake_arm_half_motor = motor(PORT18, ratio6_1, false);
+vex::gps GPS = gps(PORT17);
 digital_out clamp_piston1 = digital_out(Brain.ThreeWirePort.A);
 digital_out clamp_piston2 = digital_out(Brain.ThreeWirePort.B);
 
+// these are some structs to control and store the robots states in a compact form
 
-//this could potentialy output error to do calculations
-//these are fuctions as not to clutter main
-void drive_robot();
+struct state {
+   float pos_x;
+   float pos_y;
+   float theta;
+   bool piston_clamped = false;
+};
+
+struct control {
+   float velocity_x;
+   float velocity_y;
+   float omega;
+};
+
+//this below is the list that controls auto its a sequence that tells the code where the robot should be 
+//currently its based on position so it will stop at every point(kinda theres nuiance)
+std::list<state> Automonus_tragectory = {
+    {1,2,0,false},
+    {2,1,10,true},
+    {3,2,20,false}
+};
+
+// self explanatory
+
+class PIDController
+{
+private:
+     float m_kP = 0;
+     float m_kI = 0;
+     float m_kD = 0;
 
 
-void robot_auto();
+     float m_minOutput = 0;
+     float m_maxOutput = 0;
 
 
-//these next functions are for automatic robot movement mainly for auto but can be used for driver control if we want
+     float m_setpoint;
+     float m_iAccumulator = 0;
+     float m_lastError = 0;
 
 
-void translate_robot(float X_pos_inches, float Y_pos_inches);
+     bool m_isEnabled = false;
 
 
-void rotate_robot(float theta, int rotdirection);
+     unsigned long m_previousComputeTime = 0;
 
 
-void move_rightward();
+public:
+     void SetGains(float _kP, float _kI, float _kD)
+     {
+         m_kP = _kP;
+         m_kI = _kI;
+         m_kD = _kD;
+     }
 
 
-void move_leftward();
+     void SetSetpoint(float _setpoint)
+     {
+         m_setpoint = _setpoint;
+     }
 
-void robot_heat() {
+
+     float ComputePID(float _input)
+     {
+         static unsigned long previousComputeTime = 0;
+         static unsigned long currentComputeTime;
+         currentComputeTime = vex::timer::system();
+         float deltaTime = (currentComputeTime - previousComputeTime) / 1e6;
+         float error = m_setpoint - _input;
+         float pTerm = m_kP * error;
+         float iTerm = m_kI * m_iAccumulator;
+         float dTerm = m_kD * (error - m_lastError);
+
+
+         m_iAccumulator += error * deltaTime;
+         m_lastError = error;
+         float output = pTerm + iTerm - dTerm;
+
+
+         previousComputeTime = currentComputeTime;
+
+
+         if (output > m_maxOutput)
+         {
+             return m_maxOutput;
+         }
+         else if (output < m_minOutput)
+         {
+             return m_minOutput;
+         }
+
+
+         // Serial.println("iAccumulator:\t" + (String) m_iAccumulator +"\terror:\t" + (String) m_lastError);
+         return output;
+     }
+
+
+     float GetkP()
+     {
+         return m_kP;
+     }
+
+
+     float GetkI()
+     {
+         return m_kI;
+     }
+
+
+     float GetkD()
+     {
+         return m_kD;
+     }
+
+
+     void SetkP(float _kP)
+     {
+         m_kP = _kP;
+     }
+     void SetkI(float _kI)
+     {
+         m_kI = _kI;
+     }
+     void SetkD(float _kD)
+     {
+         m_kD = _kD;
+     }
+
+
+     void SetOutputLimits(float min, float max)
+     {
+         m_minOutput = min;
+         m_maxOutput = max;
+     }
+
+
+     float GetSetpoint()
+     {
+         return m_setpoint;
+     }
+
+
+     float GetLastError()
+     {
+         return m_lastError;
+     }
+
+
+     float GetIAccumulator()
+     {
+         return m_iAccumulator;
+     }
+
+
+     void ResetIAccumulator()
+     {
+         m_iAccumulator = 0;
+         m_previousComputeTime = vex::timer::system();
+     }
+
+
+     bool IsEnabled()
+     {
+         return m_isEnabled;
+     }
+
+
+     void SetEnabled(bool _isEnabled)
+     {
+         if (_isEnabled != m_isEnabled)
+         {
+             m_isEnabled = _isEnabled;
+             if (m_isEnabled)
+             {
+                 ResetIAccumulator();
+             }
+         }
+     }
+};
+   
+static PIDController TR_motor;
+static PIDController TL_motor;
+static PIDController BR_motor;
+static PIDController BL_motor;
+
+static state Robot_state;
+
+//robot class!!!! yay this define the things the robot can do and its parameters
+
+class Robot
+{
+private:
+   
+    float diameter_of_wheels = 2.75;
+
+    int angle_of_wheels = 45;
+
+    float max_motor_voltage = 11.7;
+
+    bool piston_pos = false;  
+
+public:
+
+    static void state_updater() {
+
+      while(true) {
+
+        Robot_state.pos_x = GPS.xPosition();
+
+        Robot_state.pos_y = GPS.yPosition();
+
+        Robot_state.theta = GPS.heading();
+    
+      }
+    }
+
+    static void spin() {
+        while(true) {
+        TR.spin(forward, TR_motor.ComputePID(TR.velocity(rpm)), volt);
+        TL.spin(forward, TL_motor.ComputePID(TL.velocity(rpm)), volt);
+        BR.spin(forward, BR_motor.ComputePID(BR.velocity(rpm)), volt);
+        BL.spin(forward, BL_motor.ComputePID(BL.velocity(rpm)), volt);
+        }
+    }
+
+    void drive_with_velocity( control velocity )
+    {
+       
+        TR_motor.SetSetpoint(velocity.velocity_x - velocity.velocity_y + velocity.omega);
+        TL_motor.SetSetpoint(velocity.velocity_x + velocity.velocity_y + velocity.omega);
+        BR_motor.SetSetpoint(- velocity.velocity_x - velocity.velocity_y + velocity.omega);
+        BL_motor.SetSetpoint(- velocity.velocity_x + velocity.velocity_y + velocity.omega);
+
+    }
+
+    void run_intake(int direction) {
+        // the direction parameter defines which way you want it to go -1 for backwards 1 for forwards and 0 for stop 
+        //ig you put any number but it is already maxed out 
+        intake_motor.spin(forward, direction*12, volt);
+        intake_arm_half_motor.spin(forward,direction*12, volt);
+
+    }
+
+    void toggle_piston(){
+
+        clamp_piston1.set(!piston_pos);
+
+        piston_pos = !piston_pos;
+
+    }
+
+    void close_piston() {
+
+        clamp_piston1.set(false);
+
+        piston_pos = false;
+
+    }
+
+    void open_piston() {
+
+        clamp_piston1.set(true);
+
+        piston_pos = true;
+       
+    }
+
+    // this will eventually turn into everything i want to display on the UI 
+    static void robot_heat() {
 
       Controller1.Screen.clearScreen();
 
@@ -77,669 +318,63 @@ void robot_heat() {
      
       Controller1.Screen.print("T%.1f T%.1f B%.1f B%.1f",TR.temperature(temperatureUnits::celsius), TL.temperature(temperatureUnits::celsius), BR.temperature(temperatureUnits::celsius), BL.temperature(temperatureUnits::celsius));
 
-}
+    }
+};
 
-void movereverse() {
-   TR.spin(forward, 200, rpm);
-   TL.spin(reverse, 200 , rpm );
-   BR.spin(forward, 200 , rpm);
-   BL.spin(reverse, 200 , rpm);
-   }
-void strL() {
-   TL.spin(reverse);
-   TR.spin(reverse);
-   BL.spin(forward);
-   BR.spin(forward);
-   }
-void stopmotors() {
-   TL.stop();
-   TR.stop();
-   BL.stop();
-   BR.stop();
-   }
+//created robot object
 
-
-
-// these are suppose to be in the tranlates function but appently vex is dumb and olny does callbacks in threads
-// these are meant to be the distance the robot wants in each converted axis they will change based on the translate function
-
-
-double distancce_rightward = 0;
-
-
-double distancce_leftward = 0;
-
-
-//these are constants of the robot so if somthing changes we just have to change it here instead of the entire code
-
-
-float diameter_of_wheels = 2.75;
-
-
-int angle_of_wheels = 45;
-
-
-float max_motor_voltage = 11.7;
-
-
-float acceleration_constant = .5;
-
-
-float driver_contol_voltage_cap = 0.60;
-
-
-//these functions are for computing valves to make code less confusing
-
-
-double distance_to_wheel_rotations(float distance_);
-
-
-//float Robot_position_absolute();
-
-
-int main() {
-
-
-  competition Competition;
-
-
-  Competition.autonomous(robot_auto);
-
-
-  Competition.drivercontrol(drive_robot);
-
-
-  clamp_piston1.set(false);
-
-
-  while (true) {
-    wait(100, msec);
-  }
-
-
-}
-
+Robot robot;
 
 void drive_robot() {
 
-  vex::thread screen_updater = vex::thread(robot_heat);
+    while(true) {
 
-  while(true) {
+        control driver_direction;
+        driver_direction.velocity_x = Controller1.Axis4.position();
+        driver_direction.velocity_y = Controller1.Axis3.position();
+        driver_direction.omega = Controller1.Axis1.position();
 
+        robot.drive_with_velocity(driver_direction);
 
-    float volt_cap = driver_contol_voltage_cap;
+        if (Controller1.ButtonR1.pressing() == true) {
+          robot.toggle_piston();
+        }
 
-
-    long direction_coord[3] = {Controller1.Axis4.position(percent), Controller1.Axis3.position(percent), Controller1.Axis1.position(percent)};
-
-
-    // the direction_coord stores the contollers position in (X, Y, ϴ) the first position would be X second y and so on
-
-
-    if (Controller1.ButtonB.pressing() == false) {
-
-
-      volt_cap = 1;
-
-
+        if(Controller1.ButtonR2.pressing() == true) {
+            robot.run_intake(1);
+        } else if(Controller1.ButtonL2.pressing() == true) {
+            robot.run_intake(-1);
+        } else {
+            robot.run_intake(0);
+        }
     }
-
-
-    TR.setVelocity( volt_cap * (direction_coord[0] - direction_coord[1] + direction_coord[2]) ,percent);
-    TL.setVelocity( volt_cap * (direction_coord[0] + direction_coord[1] + direction_coord[2]) ,percent);
-    BL.setVelocity( volt_cap * (-direction_coord[0] + direction_coord[1] + direction_coord[2]) ,percent);
-    BR.setVelocity( volt_cap * (-direction_coord[0] - direction_coord[1] + direction_coord[2]) ,percent);
-
-
-    TR.spin(forward);
-    TL.spin(forward);
-    BL.spin(forward);
-    BR.spin(forward);
-
-
-    //clamp motor code
-
-
-    if(Controller1.ButtonL2.pressing() == true) {
-
-
-     clamp_piston1.set(false);
-     clamp_piston2.set(false);
-
-
-    } else if(Controller1.ButtonR2.pressing() == true) {
-
-
-     clamp_piston1.set(true);
-     clamp_piston2.set(true);
-
-
-    }
-
-
-    // intake code
-
-
-    if( Controller1.ButtonL1.pressing() == true ) {
-
-
-      intake_motor.spin(forward, 12, volt);
-      intake_arm_half_motor.spin(forward, 12, volt);
-
-
-    }
-    else if( Controller1.ButtonR1.pressing() == true ) {
-
-
-      intake_motor.spin(forward, -12, volt);
-      intake_arm_half_motor.spin(forward, -12, volt);
-
-
-    }
-    else { intake_motor.stop(); intake_arm_half_motor.stop();}
-
-  }
-
-
 }
 
-
-void robot_auto() {
-
-
-  bool record_data = false;
-
-
-  if( Brain.SDcard.isInserted() == true ) {
-
-
-    record_data = true;
-
-
-  }
-
- clamp_piston1.set(false);
- 
- movereverse();
- wait(1.75, seconds);
- 
- stopmotors();
- clamp_piston1.set(true);
- 
- wait(2,seconds);
- intake_motor.spin(reverse);
- wait(3,seconds);
-
-
-
-}
-
-
-void rotate_robot(float theta, int rotdirection) {
-
-
-  if (rotdirection == 1) {
-
-
-    TR.spin(forward, 7, volt);
-    TL.spin(forward, 7, volt);
-    BR.spin(forward, 7, volt);
-    BL.spin(forward, 7, volt);
-
-
-    float timery = 0;
-
-
-    while(theta > timery) {
-
-
-      wait(.005, seconds);
-
-
-      timery = timery + .005;
-
-
-    }
-
-
-    TR.stop();
-    TL.stop();
-    BR.stop();
-    BL.stop();
-
-
-  }
-
-
-  if (rotdirection == -1) {
-
-
-    TR.spin(reverse, 7, volt);
-    TL.spin(reverse, 7, volt);
-    BR.spin(reverse, 7, volt);
-    BL.spin(reverse, 7, volt);
-
-
-    float timery = 0;
-
-
-    while(theta > timery) {
-
-
-      wait(.005, seconds);
-
-
-      timery = timery + .005;
-
-
-    }
-
-
-    TR.stop();
-    TL.stop();
-    BR.stop();
-    BL.stop();
-
-
-
-
-  }
-
-
-  // float P_tuning_para = .15;
-
-
-  // Inertial5.resetHeading();
-
-
-  // if ( rotdirection == 1 ) {
-
-
-  //   float error = theta - Inertial5.heading(degrees);
-
-
-  //   if ( error < 0 ) {
-
-
-  //     error = theta;
-
-
-  //   }
-
-
-  //   while(true){
-
-
-  //     TR.spin(forward, error * P_tuning_para, volt );
-  //     TL.spin(forward, error * P_tuning_para, volt );
-  //     BR.spin(forward, error * P_tuning_para, volt );
-  //     BL.spin(forward, error * P_tuning_para, volt );
-
-
-  //     error = theta - Inertial5.heading();
-
-
-  //     if (error < 0.5 && error > -0.5) {
-
-
-  //       TR.stop(hold);
-  //       TL.stop(hold);
-  //       BR.stop(hold);
-  //       BL.stop(hold);
-
-
-  //       break;
-
-
-  //     }
-
-
-  //   }
+int main()
+{
    
-  // }
-  // else {
+    // these two thread are for programs that run cuntiniously
 
+    vex::thread spinnythread = vex::thread(Robot::spin);
 
-  //   theta = 360 - theta;
+    vex::thread statethready = vex::thread(Robot::state_updater);
 
-
-  //   float error = -(theta - Inertial5.heading(degrees));
-
-
-  //   while(true){
-
-
-  //     TR.spin(forward, error * P_tuning_para, volt );
-  //     TL.spin(forward, error * P_tuning_para, volt );
-  //     BR.spin(forward, error * P_tuning_para, volt );
-  //     BL.spin(forward, error * P_tuning_para, volt );
-
-
-  //     error = -(theta - Inertial5.heading());
-
-
-  //     if (error < 0.5 && error > -0.5) {
-
-
-  //       TR.stop(hold);
-  //       TL.stop(hold);
-  //       BR.stop(hold);
-  //       BL.stop(hold);
-
-
-  //       break;
-
-
-  //     }
-
-
-  //   }
-
-
-  // }
-
-
-}
-
-
-void translate_robot(float X_pos_inches, float Y_pos_inches) {
-
-
-  distancce_rightward = distance_to_wheel_rotations((Y_pos_inches + X_pos_inches)/sqrt(2));
-  distancce_leftward = distance_to_wheel_rotations((Y_pos_inches - X_pos_inches)/sqrt(2));    // this is the mathamatics to transform X,Y coords to 45 degree perp lines
-
-
-  Brain.Screen.print(distancce_leftward);
-  Brain.Screen.newLine();  
-  Brain.Screen.print(distancce_rightward);
-  Brain.Screen.newLine();
-  Brain.Screen.print("help");
-
-
-  Brain.setTimer(0, seconds);
-
-
-  thread thread1 = thread(move_rightward);
- 
-  thread thread2 = thread(move_leftward);
-
-
-  wait(1, seconds);
-
-
-  while (TR.voltage() != 0 && TL.voltage() != 0 && BR.voltage() != 0 && BL.voltage() != 0) {
-
-
-    wait(.1, seconds);
-
-
-  }
- 
-}
-
-
-double distance_to_wheel_rotations(float distance_) {
-
-
-  double degrees = (distance_ / (diameter_of_wheels * 3.14)) * 360;        // this might explode and we'll nmeed to change a bunch of stuff to doubles
-
-
-  return degrees;
-
-
-}
-
-
-void move_rightward() {
-
-
-  TL.setPosition(0, degrees);
-  BR.setPosition(0, degrees);
-
-
-  // the rotation reaeding and values set in terms of roatition are just to temporarly control abgle of thew robot while it's moving to prevent drift
-  Inertial5.setHeading(180, degrees);
-
-
-  while( TL.voltage(volt)  <  11.5 ) {
-
-
-    if (distancce_rightward - TL.position(degrees) < 700) {
-
-
-      break;
-
-
-    }
-
-
-    TL.spin(forward, (acceleration_constant * Brain.timer(seconds)) + (.2 * (180 - Inertial5.heading(degrees))), volt);
-    BR.spin(forward, (-acceleration_constant * Brain.timer(seconds)) + (.2 * (180 - Inertial5.heading(degrees))), volt);
-
-
-  }
-
-
-  while (true) {
-
-
-    if (distancce_rightward - TL.position(degrees) < 700) {
-
-
-      break;
-
-
-    }
-
-
-    TL.spin(forward, 11.6 + (.2 * (180 - Inertial5.heading(degrees))), volt);
-    BR.spin(forward, -11.6 + (.2 * (180 - Inertial5.heading(degrees))), volt);  
-
-
-  }
-
-
-  float error = 0;
-
-
-  Brain.Screen.print(distancce_rightward);
-  Brain.Screen.newLine();
-
-
-  float P_param = 0.09;
-  float I_param = 0.0000001;
-  float D_param = 0.00015;
-
-
-  float voltage_to_motor = 0;
-
-
-  float error_accumalate = 0;
-
-
-  float error_previous = error;
-
-
-  while (true) {
-
-
-    float wheel_pos = (TL.position(degrees) + -(BR.position(degrees))) / 2;
-
-
-    //float wheel_pos = TL.position(degrees);
+    vex::thread screen_ui_updater = vex::thread(robot.robot_heat);
    
-    error = distancce_rightward - wheel_pos;
+    //set the gains of the PID
 
+    TR_motor.SetGains(1,1,1);
+    TL_motor.SetGains(1,1,1);
+    BR_motor.SetGains(1,1,1);
+    BL_motor.SetGains(1,1,1);
 
-    voltage_to_motor = D_param * (error - error_previous);
+    // this is where the robot starts
 
+    competition Competition;
 
-    error_previous = error;
+    Competition.drivercontrol(drive_robot);
 
-
-    voltage_to_motor = voltage_to_motor  + (P_param * (error)) + (I_param * (error_accumalate));
-
-
-    error_accumalate = error_accumalate + error;
-
-
-    if ( voltage_to_motor > max_motor_voltage ) {
-
-
-      voltage_to_motor = max_motor_voltage;
-
-
-    }
-
-
-    TL.spin(forward, voltage_to_motor + (.2 * (180 - Inertial5.heading(degrees))), volt);
-    BR.spin(forward, (- voltage_to_motor) + (.2 * (180 - Inertial5.heading(degrees))), volt);
-
-
-    if (error < 4 && error > -4) {
-      break;
-    }
-   
-
-
-  }
-
-
-  TL.spin(forward, 0, volt);
-  BR.spin(reverse, 0, volt);
-
+   // Competition.autonomous();
 
 }
 
-
-void move_leftward() {
-
-
-  TR.setPosition(0, degrees);
-  BL.setPosition(0, degrees);
-
-
-  while( TR.voltage(volt)  <  11.5 ) {
-
-
-    if (distancce_leftward + TR.position(degrees) < 700) {
-
-
-      break;
-
-
-    }
-
-
-    TR.spin(forward, -acceleration_constant * Brain.timer(seconds), volt);
-    BL.spin(forward, acceleration_constant * Brain.timer(seconds), volt);
-
-
-  }
-
-
-  while (true) {
-
-
-    if(distancce_leftward + TR.position(degrees) < 700) {
-
-
-      break;
-
-
-    }
-
-
-    TR.spin(forward, -11.6, volt);
-    BL.spin(forward, 11.6, volt);  
-
-
-  }
-
-
-  float error = 0;
-
-
-  Brain.Screen.print(distancce_leftward);
-  Brain.Screen.newLine();
-
-
-  float P_param = 0.09;
-  float I_param = 0.0000001;
-  float D_param = 0.00015;
-
-
-  float voltage_to_motor = 0;
-
-
-  float error_accumalate = error;
-
-
-  float error_previous = error;
-
-
-  while (true) {
-
-
-
-
-    float wheel_pos = (-(TR.position(degrees)) + BL.position(degrees)) / 2;
-
-
-    //float wheel_pos = -TR.position(degrees);
-   
-    error = distancce_leftward - wheel_pos;
-
-
-    voltage_to_motor = D_param * (error - error_previous);
-
-
-    error_previous = error;
-
-
-    voltage_to_motor = voltage_to_motor  + (P_param * (error)) + (I_param * (error_accumalate));
-
-
-    error_accumalate = error_accumalate + error;
-
-
-    if ( voltage_to_motor > max_motor_voltage ) {
-
-
-      voltage_to_motor = max_motor_voltage;
-
-
-
-
-    }
-
-
-    TR.spin(reverse, voltage_to_motor, volt);
-    BL.spin(forward, voltage_to_motor, volt);
-
-
-    if (error < 4 && error > -4) {
-      break;
-    }
-
-
-  }
-
-
-  TR.stop();
-  BL.stop();
-
-
-}
-
-
-//float Robot_position_absolute() {
-
-
-
-
- 
-
-
- 
-//}
