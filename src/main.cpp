@@ -14,8 +14,8 @@
 #include <fstream>
 #include <list>
 
-//#include "v5.h"
-//#include "v5_vcs.h"
+#include "v5.h"
+#include "v5_vcs.h"
 
 //expiremal branch init commit
 
@@ -43,10 +43,16 @@ digital_out clamp_piston2 = digital_out(Brain.ThreeWirePort.B);
 // these are some structs to control and store the robots states in a compact form
 
 struct state {
-   float pos_x;
-   float pos_y;
-   float theta;
+   float pos_x = 0;
+   float pos_y = 0;
+   float theta = 0;
    bool piston_clamped = false;
+   float intake_moving = 0;
+
+   state() = default;
+
+   state(int pos_x, int pos_y, int theta, bool piston_clamped, int intake_moving)
+        :pos_x(pos_x), pos_y(pos_y), theta(theta), piston_clamped(piston_clamped), intake_moving(intake_moving) {}
 };
 
 struct control {
@@ -58,9 +64,9 @@ struct control {
 //this below is the list that controls auto its a sequence that tells the code where the robot should be 
 //currently its based on position so it will stop at every point(kinda theres nuiance)
 std::list<state> Automonus_tragectory = {
-    {1,2,0,false},
-    {2,1,10,true},
-    {3,2,20,false}
+    state{1,2,0,false,1},
+    state{2,1,10,true,0},
+    state{3,2,20,false,-1}
 };
 
 // self explanatory
@@ -230,6 +236,74 @@ static state Robot_state;
 
 //robot class!!!! yay this define the things the robot can do and its parameters
 
+class auto_control_funcs {
+    public:
+
+    control inverseKinematics(state startState, state endState) {
+        control output;
+
+        // Compute the difference between the current and target states
+        float deltaX = endState.pos_x - startState.pos_x;
+        float deltaY = endState.pos_y - startState.pos_y;
+        float deltaTheta = endState.theta - startState.theta;
+
+        // Normalize the angle difference to the range [-180, 180]
+        while (deltaTheta > 180) {
+            deltaTheta -= 360;
+        }
+        while (deltaTheta < -180) {
+            deltaTheta += 360;
+        }
+
+        // Define gains for simple proportional control (or use PID controllers if needed)
+        const float kP_position = 1.0;  // Proportional gain for position
+        const float kP_rotation = 0.5; // Proportional gain for rotation
+
+        // Compute the velocity in the x and y directions
+        output.velocity_x = kP_position * deltaX;
+        output.velocity_y = kP_position * deltaY;
+
+        // Compute the angular velocity (omega) for rotation
+        output.omega = kP_rotation * deltaTheta;
+
+        // Optionally, limit the maximum velocities to ensure smooth operation
+        const float maxVelocity = 200; // Maximum velocity in any direction
+        const float maxOmega = 50;     // Maximum angular velocity
+
+        // Clamp the velocities
+        if (output.velocity_x > maxVelocity) output.velocity_x = maxVelocity;
+        if (output.velocity_x < -maxVelocity) output.velocity_x = -maxVelocity;
+        if (output.velocity_y > maxVelocity) output.velocity_y = maxVelocity;
+        if (output.velocity_y < -maxVelocity) output.velocity_y = -maxVelocity;
+        if (output.omega > maxOmega) output.omega = maxOmega;
+        if (output.omega < -maxOmega) output.omega = -maxOmega;
+
+        return output;
+    }
+
+    //bool robotIsReadyToMoveOnToNextState(state currentState, state targetState, bool isFinalTargetState) {
+        // Function that checks if the robot is ready to move on to the next
+        //state
+        // (whether that be a certain distance away, a certain angle away, etc.)
+        //float pos_threshold = 1; 
+        //float ang_threshold = 1; 
+
+        //float ErrorX = targetState.pos_x - currentState.pos_x;
+        //float ErrorY = targetState.pos_y - currentState.pos_y;
+        //float distanceToTarget = sqrt((ErrorX * ErrorX) + (ErrorY * ErrorY));
+
+        // angle stuff Normalize the angle difference
+
+        //float angleDifference = targetState.theta - currentState.theta;
+       // while (angleDifference > 180) angleDifference -= 360;
+       // while (angleDifference < -180) angleDifference += 360;
+
+        
+    //}
+};
+
+auto_control_funcs auto_func;
+
 class Robot
 {
 private:
@@ -268,7 +342,7 @@ public:
 
     void drive_with_velocity( control velocity )
     {
-       
+
         TR_motor.SetSetpoint(velocity.velocity_x - velocity.velocity_y + velocity.omega);
         TL_motor.SetSetpoint(velocity.velocity_x + velocity.velocity_y + velocity.omega);
         BR_motor.SetSetpoint(- velocity.velocity_x - velocity.velocity_y + velocity.omega);
@@ -311,17 +385,21 @@ public:
     // this will eventually turn into everything i want to display on the UI 
     static void robot_heat() {
 
-      Controller1.Screen.clearScreen();
+      while(true) {
+        
+        Controller1.Screen.clearScreen();
 
       // Print all motor temperatures in one line
-      Controller1.Screen.setCursor(1, 1); // Set cursor to the first line
+        Controller1.Screen.setCursor(1, 1); // Set cursor to the first line
      
-      Controller1.Screen.print("T%.1f T%.1f B%.1f B%.1f",TR.temperature(temperatureUnits::celsius), TL.temperature(temperatureUnits::celsius), BR.temperature(temperatureUnits::celsius), BL.temperature(temperatureUnits::celsius));
-
+        Controller1.Screen.print("T%.1f T%.1f B%.1f B%.1f",TR.temperature(temperatureUnits::celsius), TL.temperature(temperatureUnits::celsius), BR.temperature(temperatureUnits::celsius), BL.temperature(temperatureUnits::celsius));
+      
+        wait(0.1, seconds);
+      }
     }
 };
 
-//created robot object
+//created robot object and the control functions object I technically probably shouldnt use a class for that but im have fun 
 
 Robot robot;
 
@@ -330,19 +408,19 @@ void drive_robot() {
     while(true) {
 
         control driver_direction;
-        driver_direction.velocity_x = Controller1.Axis4.position();
-        driver_direction.velocity_y = Controller1.Axis3.position();
-        driver_direction.omega = Controller1.Axis1.position();
+        driver_direction.velocity_x = (Controller1.Axis4.position() * 200);
+        driver_direction.velocity_y = (Controller1.Axis3.position() * 200);
+        driver_direction.omega = (Controller1.Axis1.position() * 200);
 
         robot.drive_with_velocity(driver_direction);
 
-        if (Controller1.ButtonR1.pressing() == true) {
+        if (Controller1.ButtonL1.pressing() == true) {
           robot.toggle_piston();
         }
 
-        if(Controller1.ButtonR2.pressing() == true) {
+        if(Controller1.ButtonL2.pressing() == true) {
             robot.run_intake(1);
-        } else if(Controller1.ButtonL2.pressing() == true) {
+        } else if(Controller1.ButtonR2.pressing() == true) {
             robot.run_intake(-1);
         } else {
             robot.run_intake(0);
@@ -363,10 +441,10 @@ int main()
    
     //set the gains of the PID
 
-    TR_motor.SetGains(1,1,1);
-    TL_motor.SetGains(1,1,1);
-    BR_motor.SetGains(1,1,1);
-    BL_motor.SetGains(1,1,1);
+    TR_motor.SetGains(2,1,.5);
+    TL_motor.SetGains(2,1,.5);
+    BR_motor.SetGains(2,1,.5);
+    BL_motor.SetGains(2,1,.5);
 
     // this is where the robot starts
 
