@@ -281,25 +281,29 @@ class auto_control_funcs {
         return output;
     }
 
-    //bool robotIsReadyToMoveOnToNextState(state currentState, state targetState, bool isFinalTargetState) {
+    bool robotIsReadyToMoveOnToNextState(state currentState, state targetState) {
         // Function that checks if the robot is ready to move on to the next
         //state
-        // (whether that be a certain distance away, a certain angle away, etc.)
-        //float pos_threshold = 1; 
-        //float ang_threshold = 1; 
+        float pos_threshold = 1; 
+        float ang_threshold = 1; 
 
-        //float ErrorX = targetState.pos_x - currentState.pos_x;
-        //float ErrorY = targetState.pos_y - currentState.pos_y;
-        //float distanceToTarget = sqrt((ErrorX * ErrorX) + (ErrorY * ErrorY));
+        float ErrorX = targetState.pos_x - currentState.pos_x;
+        float ErrorY = targetState.pos_y - currentState.pos_y;
+        float distanceToTarget = sqrt((ErrorX * ErrorX) + (ErrorY * ErrorY));
 
-        // angle stuff Normalize the angle difference
+         //angle stuff Normalize the angle difference 
 
-        //float angleDifference = targetState.theta - currentState.theta;
-       // while (angleDifference > 180) angleDifference -= 360;
-       // while (angleDifference < -180) angleDifference += 360;
+        float angleDifference = targetState.theta - currentState.theta;
+        while (angleDifference > 180) angleDifference -= 360;
+        while (angleDifference < -180) angleDifference += 360;
 
-        
-    //}
+        if (distanceToTarget < pos_threshold && abs(angleDifference) < ang_threshold) {
+          return true;
+        }
+        else {
+          return false;
+        }
+    }
 };
 
 auto_control_funcs auto_func;
@@ -311,8 +315,6 @@ private:
     float diameter_of_wheels = 2.75;
 
     int angle_of_wheels = 45;
-
-    float max_motor_voltage = 11.7;
 
     bool piston_pos = false;  
 
@@ -408,9 +410,9 @@ void drive_robot() {
     while(true) {
 
         control driver_direction;
-        driver_direction.velocity_x = (Controller1.Axis4.position() * 200);
-        driver_direction.velocity_y = (Controller1.Axis3.position() * 200);
-        driver_direction.omega = (Controller1.Axis1.position() * 200);
+        driver_direction.velocity_x = (Controller1.Axis4.position(percent)*200);
+        driver_direction.velocity_y = (Controller1.Axis3.position(percent)*200);
+        driver_direction.omega = (Controller1.Axis1.position(percent)*200);
 
         robot.drive_with_velocity(driver_direction);
 
@@ -441,12 +443,18 @@ int main()
    
     //set the gains of the PID
 
-    TR_motor.SetGains(2,1,.5);
-    TL_motor.SetGains(2,1,.5);
-    BR_motor.SetGains(2,1,.5);
-    BL_motor.SetGains(2,1,.5);
+    TR_motor.SetGains(0.001,0.000001,0.00001);
+    TL_motor.SetGains(0.001,0.000001,0.00001);
+    BR_motor.SetGains(0.001,0.000001,0.00001);
+    BL_motor.SetGains(0.001,0.000001,0.00001);
 
-    // this is where the robot starts
+    TR_motor.SetOutputLimits(-12, 12); // Voltage limits (-12V to 12V)
+    TL_motor.SetOutputLimits(-12, 12);
+    BR_motor.SetOutputLimits(-12, 12);
+    BL_motor.SetOutputLimits(-12, 12);
+
+
+    // this is where the robot starts anything that should be initized in main should happen above this comment 
 
     competition Competition;
 
