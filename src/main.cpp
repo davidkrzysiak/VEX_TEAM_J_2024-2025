@@ -248,19 +248,41 @@ private:
 
     bool piston_pos = false;  
 
+    static float get_average_angle(float angle1, float angle2) {
+
+            // Convert degrees to radians
+        double rad1 = angle1 * 3.14159 / 180.0;
+        double rad2 = angle2 * 3.14159 / 180.0;
+
+        // Compute the average using vector components
+        double x = (cos(rad1) + cos(rad2)) / 2.0;
+        double y = (sin(rad1) + sin(rad2)) / 2.0;
+
+        // Calculate the resultant angle
+        double meanRad = atan2(y, x);
+
+        // Convert back to degrees
+        double meanDeg = meanRad * 180.0 / 3.14159;
+
+        // Ensure the angle is within [0, 360)
+        if (meanDeg < 0) {
+            meanDeg += 360.0;
+        }
+
+    return meanDeg;
+    }
+
 public:
 
     static void state_updater() {
 
-      while(true) {
+        while (true) {
 
-        Robot_state.pos_x = GPS.xPosition(mm);
+            float robot_angle = get_average_angle(GPS.heading(), Inertial5.heading());
 
-        Robot_state.pos_y = GPS.yPosition(mm);
 
-        Robot_state.theta = GPS.heading(degrees);
-    
-      }
+            
+        }
     }
 
     static void spin() {
