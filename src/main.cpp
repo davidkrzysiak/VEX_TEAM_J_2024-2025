@@ -269,19 +269,64 @@ private:
             meanDeg += 360.0;
         }
 
-    return meanDeg;
+        return meanDeg;
+    }
+
+    void polarToCartesian(double r, double theta, double &x, double &y) {
+        double rad = (theta + 45.0) * M_PI / 180.0;  // Convert to radians and apply offset
+        x = r * cos(rad);
+        y = r * sin(rad);
+    }
+
+    static float wieghted_average_of_2_values(float mean1, float wieght1, float mean2, float wieght2) {
+
+        return (((mean1*wieght1) + (mean2 * wieght2)) / (wieght1 + wieght2));
+
     }
 
 public:
 
     static void state_updater() {
 
+        Inertial5.calibrate();
+
+        GPS.calibrate();
+
+        while(GPS.isCalibrating()){wait(0.1, seconds);}
+
+        Inertial5.setHeading(GPS.heading(degrees), degrees);
+
+        float odometrty_wieght = 100; //this will determine how much the odom matters in respect to the gps; at 100 it is equal to the 
+        // gps when it has the highest signal quality
+
+        float previous_degree_TR = 0;
+
+        float movement_X_dir;
+
         while (true) {
 
-            float robot_angle = get_average_angle(GPS.heading(), Inertial5.heading());
+            Robot_state.theta = get_average_angle(GPS.heading(), Inertial5.heading());
 
+        Controller1.Screen.setCursor(1, 1); // Set cursor to the first line
+     
+        Controller1.Screen.print(Robot_state.theta);
+        Controller1.Screen.newLine();
+        Controller1.Screen.print(GPS.heading());
+        Controller1.Screen.newLine();
+        Controller1.Screen.print(Inertial5.heading());
 
+            Brain.Screen.print(Robot_state.theta);
             
+            Brain.Screen.newLine();
+
+            // add sines and cosines and the TL implement movement_X_dir = Robot_state.pos_x + (previous_degree_TR - TR.position(degrees));
+
+            Robot_state.pos_x = wieghted_average_of_2_values(GPS.xPosition(), GPS.quality(), 0, odometrty_wieght);
+
+            Robot_state.pos_y = wieghted_average_of_2_values(GPS.yPosition(), GPS.quality(), 0, odometrty_wieght);
+
+            previous_degree_TR = TR.position(degrees);
+        
         }
     }
 
@@ -345,13 +390,13 @@ public:
         Controller1.Screen.clearScreen();
 
       // Print all motor temperatures in one line
-        Controller1.Screen.setCursor(1, 1); // Set cursor to the first line
+        //Controller1.Screen.setCursor(1, 1); // Set cursor to the first line
      
-        Controller1.Screen.print("T%.1f T%.1f B%.1f B%.1f",TR.temperature(temperatureUnits::celsius), TL.temperature(temperatureUnits::celsius), BR.temperature(temperatureUnits::celsius), BL.temperature(temperatureUnits::celsius));
-        Controller1.Screen.newLine();
-        Controller1.Screen.print(Robot_state.pos_x);
-        Controller1.Screen.newLine();
-        Controller1.Screen.print(Robot_state.pos_y);
+        //Controller1.Screen.print("T%.1f T%.1f B%.1f B%.1f",TR.temperature(temperatureUnits::celsius), TL.temperature(temperatureUnits::celsius), BR.temperature(temperatureUnits::celsius), BL.temperature(temperatureUnits::celsius));
+        //Controller1.Screen.newLine();
+        //Controller1.Screen.print(Robot_state.pos_x);
+        //Controller1.Screen.newLine();
+        //Controller1.Screen.print(Robot_state.pos_y);
 
         wait(0.1, seconds);
       }
@@ -363,6 +408,21 @@ public:
 Robot robot;
 
 class auto_control_funcs {
+    
+    private:
+
+    float normalize_angle_deg(float input_angle ) {
+
+        while (input_angle > 180) {
+            input_angle -= 360;
+        }
+        while (input_angle < -180) {
+            input_angle += 360;
+        }
+
+        return input_angle;
+    }
+
     public:
 
     control inverseKinematics(state startState, state endState) {
@@ -378,22 +438,16 @@ class auto_control_funcs {
         // Compute the difference between the current and target states
         float deltaX = endState.pos_x - startState.pos_x;
         float deltaY = endState.pos_y - startState.pos_y;
-       // float deltaTheta = endState.theta - startState.theta;
+        float deltaTheta = endState.theta - startState.theta;
 
-        // Normalize the angle difference to the range [-180, 180]
-       // while (deltaTheta > 180) {
-       //     deltaTheta -= 360;
-      //  }
-      //  while (deltaTheta < -180) {
-      //      deltaTheta += 360;
-      //  }
+        deltaTheta = normalize_angle_deg(deltaTheta);
 
         // Compute the velocity in the x and y directions
         output.velocity_x = kP_position * deltaX;
         output.velocity_y = kP_position * deltaY;
 
         // Compute the angular velocity (omega) for rotation
-      //  output.omega = kP_rotation * deltaTheta;
+        output.omega = kP_rotation * deltaTheta;
 
         // if the vector is over the max speed it nomralizes it and multiples it by 200 so it prevents the robot olny
         // moving diagonally when the gap is big enough
@@ -471,15 +525,15 @@ void drive_robot() {
 
         robot.drive_with_velocity(driver_direction);
 
-        if (Controller1.ButtonR1.pressing() == true) {
+        if (Controller1.ButtonL1.pressing() == true) {
             robot.close_piston();
-        }else if(Controller1.ButtonL1.pressing()) {
+        }else if(Controller1.ButtonR1.pressing()) {
             robot.open_piston();
         }
 
-        if(Controller1.ButtonL2.pressing() == true) {
+        if(Controller1.ButtonR2.pressing() == true) {
             robot.run_intake(-1);
-        } else if(Controller1.ButtonR2.pressing() == true) {
+        } else if(Controller1.ButtonL2.pressing() == true) {
             robot.run_intake(1);
         } else {
             robot.run_intake(0);
@@ -489,7 +543,32 @@ void drive_robot() {
 
 void auto_loop() {
 
-    auto_func.follow_tragectory(Automonus_tragectory);
+   // auto_func.follow_tragectory(Automonus_tragectory);
+
+   control forward;
+   forward.velocity_y = -100;
+   forward.velocity_x = 0;
+   forward.omega = 0;
+
+   robot.drive_with_velocity(forward);
+
+   forward.velocity_y = -2000;
+
+   wait(0.5,seconds);
+
+   robot.drive_with_velocity(forward);
+
+   wait(1, seconds);
+
+   forward.velocity_y= 0 ; 
+
+   robot.drive_with_velocity(forward);
+
+   robot.open_piston();
+
+   wait(0.1, seconds);
+
+   robot.run_intake(-1);
 
 }
 
@@ -506,17 +585,16 @@ int main()
    
     //set the gains of the PID
 
-    TR_motor.SetGains(0.06,0.0000000001,0.015);
-    TL_motor.SetGains(0.06,0.0000000001,0.015);
-    BR_motor.SetGains(0.06,0.0000000001,0.015);
-    BL_motor.SetGains(0.06,0.0000000001,0.015);
+    TR_motor.SetGains(0.07,0.0000000001,0.2);
+    TL_motor.SetGains(0.07,0.0000000001,0.2);
+    BR_motor.SetGains(0.07,0.0000000001,0.2);
+    BL_motor.SetGains(0.07,0.0000000001,0.2);
 
 
     TR_motor.SetOutputLimits(-12, 12); // Voltage limits (-12V to 12V)
     TL_motor.SetOutputLimits(-12, 12);
     BR_motor.SetOutputLimits(-12, 12);
     BL_motor.SetOutputLimits(-12, 12);
-
 
     // this is where the robot starts anything that should be initized in main should happen above this comment 
 
