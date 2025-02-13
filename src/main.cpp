@@ -36,7 +36,7 @@ vex::motor BR = motor(PORT4, ratio18_1, false);
 vex::inertial Inertial5 = inertial(PORT5);
 vex::motor intake_motor = motor(PORT19, ratio6_1, false);
 vex::motor intake_arm_half_motor = motor(PORT18, ratio6_1, false);
-vex::gps GPS = gps(PORT17);
+vex::gps GPS = gps(PORT17, 90, right );
 digital_out clamp_piston1 = digital_out(Brain.ThreeWirePort.A);
 digital_out clamp_piston2 = digital_out(Brain.ThreeWirePort.B);
 
@@ -296,7 +296,7 @@ public:
 
         Inertial5.setHeading(GPS.heading(degrees), degrees);
 
-        float odometrty_wieght = 100; //this will determine how much the odom matters in respect to the gps; at 100 it is equal to the 
+        float odometrty_wieght = 0; //this will determine how much the odom matters in respect to the gps; at 100 it is equal to the 
         // gps when it has the highest signal quality
 
         float previous_degree_TR = 0;
@@ -307,13 +307,13 @@ public:
 
             Robot_state.theta = get_average_angle(GPS.heading(), Inertial5.heading());
 
-        Controller1.Screen.setCursor(1, 1); // Set cursor to the first line
+            Controller1.Screen.setCursor(1, 1); // Set cursor to the first line
      
-        Controller1.Screen.print(Robot_state.theta);
-        Controller1.Screen.newLine();
-        Controller1.Screen.print(GPS.heading());
-        Controller1.Screen.newLine();
-        Controller1.Screen.print(Inertial5.heading());
+            Controller1.Screen.print(Robot_state.theta);
+            Controller1.Screen.newLine();
+            Controller1.Screen.print(GPS.heading());
+            Controller1.Screen.newLine();
+            Controller1.Screen.print(Inertial5.heading());
 
             Brain.Screen.print(Robot_state.theta);
             
@@ -423,6 +423,10 @@ class auto_control_funcs {
         return input_angle;
     }
 
+    float deg_to_rad(float degree) {
+        return degree * (M_PI/180);
+    }
+
     public:
 
     control inverseKinematics(state startState, state endState) {
@@ -438,23 +442,36 @@ class auto_control_funcs {
         // Compute the difference between the current and target states
         float deltaX = endState.pos_x - startState.pos_x;
         float deltaY = endState.pos_y - startState.pos_y;
+
         float deltaTheta = endState.theta - startState.theta;
 
-        deltaTheta = normalize_angle_deg(deltaTheta);
+        //the math here is about to get a little funny. but bascially the robot velocity function olny works in its own corrdinate 
+        //system disconnected from the field. i have to do some work with three different coordinates systems so i'll probably 
+        // have a notebook page dedicated to the mess of sines and cosines im about to spew
+
+        float angle_of_movment = atan2f (deltaY, deltaX);
+
+        float  angle_heading_is_displaced = deg_to_rad(normalize_angle_deg(startState.theta)) - angle_of_movment; 
 
         // Compute the velocity in the x and y directions
-        output.velocity_x = kP_position * deltaX;
-        output.velocity_y = kP_position * deltaY;
-
-        // Compute the angular velocity (omega) for rotation
-        output.omega = kP_rotation * deltaTheta;
+        output.velocity_x = kP_position * deltaX * sinf(angle_heading_is_displaced);
+        output.velocity_y = kP_position * deltaY * cosf(angle_heading_is_displaced);
 
         // if the vector is over the max speed it nomralizes it and multiples it by 200 so it prevents the robot olny
-        // moving diagonally when the gap is big enough
+        // moving diagonally when the gap is big enough. this is basically a complex clamp 
         if (sqrt((output.velocity_x * output.velocity_x) + (output.velocity_y * output.velocity_y)) > maxVelocity) {
             output.velocity_x = ((output.velocity_x) / (sqrt((output.velocity_x * output.velocity_x) + (output.velocity_y * output.velocity_y)))) * 200;
             output.velocity_y = ((output.velocity_y) / (sqrt((output.velocity_x * output.velocity_x) + (output.velocity_y * output.velocity_y)))) * 200;
         }
+
+        // this is for omega
+        
+        deltaTheta = normalize_angle_deg(deltaTheta);
+
+        // Compute the angular velocity (omega) for rotation
+        output.omega = kP_rotation * deltaTheta;
+
+        //this just clamps the omegas 
         
         if (output.omega > maxOmega) output.omega = maxOmega;
         if (output.omega < -maxOmega) output.omega = -maxOmega;
