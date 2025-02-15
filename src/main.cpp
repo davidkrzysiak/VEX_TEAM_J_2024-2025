@@ -36,9 +36,12 @@ vex::motor BR = motor(PORT4, ratio18_1, false);
 vex::inertial Inertial5 = inertial(PORT5);
 vex::motor intake_motor = motor(PORT19, ratio6_1, false);
 vex::motor intake_arm_half_motor = motor(PORT18, ratio6_1, false);
+vex::motor lady_brown = motor(PORT8, ratio36_1, false);
 vex::gps GPS = gps(PORT17, 90, right );
 digital_out clamp_piston1 = digital_out(Brain.ThreeWirePort.A);
 digital_out clamp_piston2 = digital_out(Brain.ThreeWirePort.B);
+vex::rotation X_encoder = rotation(PORT16);
+vex::rotation Y_encoder = rotation(PORT15);
 
 // these are some structs to control and store the robots states in a compact form
 
@@ -284,6 +287,10 @@ private:
 
     }
 
+    static float deg_to_rad(float degree) {
+        return degree * (M_PI/180);
+    }
+
 public:
 
     static void state_updater() {
@@ -296,12 +303,18 @@ public:
 
         Inertial5.setHeading(GPS.heading(degrees), degrees);
 
-        float odometrty_wieght = 0; //this will determine how much the odom matters in respect to the gps; at 100 it is equal to the 
+        float odometrty_wieght = 100; //this will determine how much the odom matters in respect to the gps; at 100 it is equal to the 
         // gps when it has the highest signal quality
 
-        float previous_degree_TR = 0;
+        //this is the intitial pos set to none gps values once zero position is confirmed 
 
-        float movement_X_dir;
+        float previous_degree_x = 0;
+
+        float previous_degree_y = 0;
+
+        float encodered_X_dir;
+
+        float encodered_y_dir;
 
         while (true) {
 
@@ -309,23 +322,23 @@ public:
 
             Controller1.Screen.setCursor(1, 1); // Set cursor to the first line
      
+            Controller1.Screen.print(Robot_state.pos_x);
+            Controller1.Screen.newLine();
+            Controller1.Screen.print(Robot_state.pos_y);
+            Controller1.Screen.newLine();
             Controller1.Screen.print(Robot_state.theta);
-            Controller1.Screen.newLine();
-            Controller1.Screen.print(GPS.heading());
-            Controller1.Screen.newLine();
-            Controller1.Screen.print(Inertial5.heading());
 
-            Brain.Screen.print(Robot_state.theta);
-            
-            Brain.Screen.newLine();
+            encodered_X_dir = (((X_encoder.position(degrees) - previous_degree_x) * cosf(deg_to_rad(Robot_state.theta))) + ((Y_encoder.position(degrees) - previous_degree_y ) * sinf(deg_to_rad(Robot_state.theta))))/2;
 
-            // add sines and cosines and the TL implement movement_X_dir = Robot_state.pos_x + (previous_degree_TR - TR.position(degrees));
+            encodered_y_dir = (((X_encoder.position(degrees) - previous_degree_x) * sinf(deg_to_rad(Robot_state.theta))) + ((Y_encoder.position(degrees) - previous_degree_y ) * cosf(deg_to_rad(Robot_state.theta))))/2;
 
-            Robot_state.pos_x = wieghted_average_of_2_values(GPS.xPosition(), GPS.quality(), 0, odometrty_wieght);
+            Robot_state.pos_x = wieghted_average_of_2_values(GPS.xPosition(), GPS.quality(), encodered_X_dir, odometrty_wieght);
 
-            Robot_state.pos_y = wieghted_average_of_2_values(GPS.yPosition(), GPS.quality(), 0, odometrty_wieght);
+            Robot_state.pos_y = wieghted_average_of_2_values(GPS.yPosition(), GPS.quality(), encodered_y_dir, odometrty_wieght);
 
-            previous_degree_TR = TR.position(degrees);
+            previous_degree_x = X_encoder.position(degrees);
+
+            previous_degree_y = Y_encoder.position(degrees);
         
         }
     }
@@ -432,11 +445,11 @@ class auto_control_funcs {
     control inverseKinematics(state startState, state endState) {
         control output;
 
-        const float maxVelocity = 50; // Maximum velocity in any direction
+        const float maxVelocity = 25; // Maximum velocity in any direction
         const float maxOmega = 25;     // Maximum angular velocity
 
         // turn these down if we want the robot to be slower closer to the target
-        const float kP_position = 1.0;
+        const float kP_position = 50;
         const float kP_rotation = 0.5;
 
         // Compute the difference between the current and target states
@@ -555,12 +568,22 @@ void drive_robot() {
         } else {
             robot.run_intake(0);
         }
+
+        if(Controller1.ButtonX.pressing() == true) {
+            lady_brown.spin(forward, 3, volt);
+        } else if(Controller1.ButtonB.pressing() == true) {
+            lady_brown.spin(reverse, 3, volt);
+        } else {
+            lady_brown.stop(hold); 
+        }
+
+        // x and b for lady brown 
     }
 }
 
 void auto_loop() {
 
-   // auto_func.follow_tragectory(Automonus_tragectory);
+   auto_func.follow_tragectory(Automonus_tragectory);
 
    control forward;
    forward.velocity_y = -100;
