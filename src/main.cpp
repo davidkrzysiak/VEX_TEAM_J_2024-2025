@@ -36,8 +36,8 @@ vex::motor BR = motor(PORT4, ratio18_1, false);
 vex::inertial Inertial5 = inertial(PORT5);
 vex::motor intake_motor = motor(PORT19, ratio6_1, false);
 vex::motor intake_arm_half_motor = motor(PORT18, ratio6_1, false);
-vex::motor lady_brown = motor(PORT8, ratio36_1, false);
-vex::gps GPS = gps(PORT17, 90, right );
+vex::motor lady_brown = motor(PORT11, ratio36_1, false);
+vex::gps GPS = gps(PORT17);
 digital_out clamp_piston1 = digital_out(Brain.ThreeWirePort.A);
 digital_out clamp_piston2 = digital_out(Brain.ThreeWirePort.B);
 vex::rotation X_encoder = rotation(PORT16);
@@ -291,6 +291,26 @@ private:
         return degree * (M_PI/180);
     }
 
+    static float normalize_angle_deg(float input_angle ) {
+
+        while (input_angle > 180) {
+            input_angle -= 360;
+        }
+        while (input_angle < -180) {
+            input_angle += 360;
+        }
+
+        return input_angle;
+    }
+
+    static float heading_to_angle(float heading) {
+
+        float angle = 90 - heading; 
+
+        return normalize_angle_deg(angle);
+
+    }
+
 public:
 
     static void state_updater() {
@@ -318,23 +338,16 @@ public:
 
         while (true) {
 
-            Robot_state.theta = get_average_angle(GPS.heading(), Inertial5.heading());
+            Robot_state.theta = get_average_angle(heading_to_angle(GPS.heading()), heading_to_angle(Inertial5.heading()));
 
-            Controller1.Screen.setCursor(1, 1); // Set cursor to the first line
-     
-            Controller1.Screen.print(Robot_state.pos_x);
-            Controller1.Screen.newLine();
-            Controller1.Screen.print(Robot_state.pos_y);
-            Controller1.Screen.newLine();
-            Controller1.Screen.print(Robot_state.theta);
 
-            encodered_X_dir = (((X_encoder.position(degrees) - previous_degree_x) * cosf(deg_to_rad(Robot_state.theta))) + ((Y_encoder.position(degrees) - previous_degree_y ) * sinf(deg_to_rad(Robot_state.theta))))/2;
+            encodered_X_dir = (((X_encoder.position(degrees) - previous_degree_x) * cosf(deg_to_rad(Robot_state.theta))) + ((Y_encoder.position(degrees) - previous_degree_y ) * cosf(deg_to_rad(normalize_angle_deg(Robot_state.theta - 90)))));
 
-            encodered_y_dir = (((X_encoder.position(degrees) - previous_degree_x) * sinf(deg_to_rad(Robot_state.theta))) + ((Y_encoder.position(degrees) - previous_degree_y ) * cosf(deg_to_rad(Robot_state.theta))))/2;
+            encodered_y_dir = (((X_encoder.position(degrees) - previous_degree_x) * sinf(deg_to_rad(Robot_state.theta))) + ((Y_encoder.position(degrees) - previous_degree_y ) * sinf(deg_to_rad(normalize_angle_deg(Robot_state.theta - 90)))));
 
-            Robot_state.pos_x = wieghted_average_of_2_values(GPS.xPosition(), GPS.quality(), encodered_X_dir, odometrty_wieght);
+            Robot_state.pos_x = wieghted_average_of_2_values(GPS.xPosition(), GPS.quality(), Robot_state.pos_x + encodered_X_dir, odometrty_wieght);
 
-            Robot_state.pos_y = wieghted_average_of_2_values(GPS.yPosition(), GPS.quality(), encodered_y_dir, odometrty_wieght);
+            Robot_state.pos_y = wieghted_average_of_2_values(GPS.yPosition(), GPS.quality(), Robot_state.pos_y + encodered_y_dir, odometrty_wieght);
 
             previous_degree_x = X_encoder.position(degrees);
 
@@ -411,6 +424,14 @@ public:
         //Controller1.Screen.newLine();
         //Controller1.Screen.print(Robot_state.pos_y);
 
+        Controller1.Screen.setCursor(1, 1); // Set cursor to the first line
+     
+            Controller1.Screen.print(Robot_state.pos_x);
+            Controller1.Screen.newLine();
+            Controller1.Screen.print(Robot_state.pos_y);
+            Controller1.Screen.newLine();
+            Controller1.Screen.print(Robot_state.theta);
+
         wait(0.1, seconds);
       }
     }
@@ -467,8 +488,8 @@ class auto_control_funcs {
         float  angle_heading_is_displaced = deg_to_rad(normalize_angle_deg(startState.theta)) - angle_of_movment; 
 
         // Compute the velocity in the x and y directions
-        output.velocity_x = kP_position * deltaX * sinf(angle_heading_is_displaced);
-        output.velocity_y = kP_position * deltaY * cosf(angle_heading_is_displaced);
+        output.velocity_x = kP_position * cosf(angle_heading_is_displaced);
+        output.velocity_y = kP_position * sinf(angle_heading_is_displaced);
 
         // if the vector is over the max speed it nomralizes it and multiples it by 200 so it prevents the robot olny
         // moving diagonally when the gap is big enough. this is basically a complex clamp 
