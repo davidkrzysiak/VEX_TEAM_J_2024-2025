@@ -311,49 +311,102 @@ private:
 
     }
 
+    static float sigmoid(float x) {
+    return 1.0f / (1.0f + expf(-x));
+    }   
+
+    static float expf_approx(float x) {
+    // Fast exp approximation for embedded systems
+    x = 1.0f + x / 1024.0f;
+    x *= x; x *= x; x *= x; x *= x;
+    x *= x; x *= x; x *= x; x *= x;
+    return x;
+    }
 public:
 
     static void state_updater() {
 
-        Inertial5.calibrate();
+    Inertial5.calibrate();
+    GPS.calibrate();
+    while(GPS.isCalibrating()) { wait(0.1, seconds); }
 
-        GPS.calibrate();
+    // Configuration constants
+    const float WHEEL_DIAMETER = 2.75; // inches
+    const float ENCODER_TPI = (360.0 / (WHEEL_DIAMETER * M_PI)); // Ticks per inch
+    const float GPS_TRUST_THRESHOLD = 0.3f; // Minimum GPS quality to trust
+    const float ODOMETRY_DECAY = 0.95f; // Odometry error decay factor
 
-        while(GPS.isCalibrating()){wait(0.1, seconds);}
+    // State variables
+    float previous_degree_x = X_encoder.position(degrees);
+    float previous_degree_y = Y_encoder.position(degrees);
+    float odometry_x = GPS.xPosition();
+    float odometry_y = GPS.yPosition();
+    float heading_offset = GPS.heading() - Inertial5.heading();
 
-        Inertial5.setHeading(GPS.heading(degrees), degrees);
+    while(true) {
+        // Calculate time delta for integration
+        static uint32_t last_time = vex::timer::system();
+        uint32_t current_time = vex::timer::system();
+        float dt = (current_time - last_time) / 1000.0f;
+        last_time = current_time;
 
-        float odometrty_wieght = 100; //this will determine how much the odom matters in respect to the gps; at 100 it is equal to the 
-        // gps when it has the highest signal quality
+        // Get sensor data with error checking
+        float gps_x = GPS.xPosition();
+        float gps_y = GPS.yPosition();
+        float gps_heading = GPS.heading();
+        float gps_quality = GPS.quality() / 100.0f;
+        float inertial_heading = Inertial5.heading();
 
-        //this is the intitial pos set to none gps values once zero position is confirmed 
+        // Calculate encoder deltas in inches
+        float dx_enc = (X_encoder.position(degrees) - previous_degree_x) / ENCODER_TPI;
+        float dy_enc = (Y_encoder.position(degrees) - previous_degree_y) / ENCODER_TPI;
+        previous_degree_x = X_encoder.position(degrees);
+        previous_degree_y = Y_encoder.position(degrees);
 
-        float previous_degree_x = 0;
-
-        float previous_degree_y = 0;
-
-        float encodered_X_dir;
-
-        float encodered_y_dir;
-
-        while (true) {
-
-            Robot_state.theta = get_average_angle(heading_to_angle(GPS.heading()), heading_to_angle(Inertial5.heading()));
-
-
-            encodered_X_dir = (((X_encoder.position(degrees) - previous_degree_x) * cosf(deg_to_rad(Robot_state.theta))) + ((Y_encoder.position(degrees) - previous_degree_y ) * cosf(deg_to_rad(normalize_angle_deg(Robot_state.theta - 90)))));
-
-            encodered_y_dir = (((X_encoder.position(degrees) - previous_degree_x) * sinf(deg_to_rad(Robot_state.theta))) + ((Y_encoder.position(degrees) - previous_degree_y ) * sinf(deg_to_rad(normalize_angle_deg(Robot_state.theta - 90)))));
-
-            Robot_state.pos_x = wieghted_average_of_2_values(GPS.xPosition(), GPS.quality(), Robot_state.pos_x + encodered_X_dir, odometrty_wieght);
-
-            Robot_state.pos_y = wieghted_average_of_2_values(GPS.yPosition(), GPS.quality(), Robot_state.pos_y + encodered_y_dir, odometrty_wieght);
-
-            previous_degree_x = X_encoder.position(degrees);
-
-            previous_degree_y = Y_encoder.position(degrees);
-        
+        // Fuse heading sources
+        float fused_heading = inertial_heading + heading_offset;
+        if(gps_quality > GPS_TRUST_THRESHOLD) {
+            fused_heading = gps_heading;
+            heading_offset = fused_heading - inertial_heading;
         }
+
+        // Convert encoder deltas to global coordinates
+        float theta_rad = deg_to_rad(fused_heading);
+        float cos_theta = cosf(theta_rad);
+        float sin_theta = sinf(theta_rad);
+        
+        odometry_x += dx_enc * cos_theta - dy_enc * sin_theta;
+        odometry_y += dx_enc * sin_theta + dy_enc * cos_theta;
+
+        // Fuse GPS and odometry using adaptive weighting
+        if(gps_quality > GPS_TRUST_THRESHOLD) {
+            // Sigmoid weighting for smooth transition
+            float gps_weight = 1.0f / (1.0f + expf(-10.0f * (gps_quality - 0.5f)));
+            
+            Robot_state.pos_x = gps_weight * gps_x + (1 - gps_weight) * odometry_x;
+            Robot_state.pos_y = gps_weight * gps_y + (1 - gps_weight) * odometry_y;
+            
+            // Reset odometry accumulation error when GPS is good
+            odometry_x = Robot_state.pos_x;
+            odometry_y = Robot_state.pos_y;
+        } else {
+            // Use pure odometry when GPS is unreliable
+            Robot_state.pos_x = odometry_x;
+            Robot_state.pos_y = odometry_y;
+        }
+
+        // Update heading with complementary filter
+        Robot_state.theta = normalize_angle_deg(
+            0.98f * fused_heading + 
+            0.02f * heading_to_angle(Inertial5.heading())
+        );
+
+        // Apply odometry error decay
+        odometry_x += (Robot_state.pos_x - odometry_x) * (1 - ODOMETRY_DECAY);
+        odometry_y += (Robot_state.pos_y - odometry_y) * (1 - ODOMETRY_DECAY);
+
+        wait(10, msec); // Consistent update interval
+    }
     }
 
     static void spin() {
@@ -445,70 +498,87 @@ class auto_control_funcs {
     
     private:
 
-    float normalize_angle_deg(float input_angle ) {
-
-        while (input_angle > 180) {
-            input_angle -= 360;
-        }
-        while (input_angle < -180) {
-            input_angle += 360;
-        }
-
-        return input_angle;
+    float normalize_angle_deg(float angle) {
+    angle = fmodf(angle, 360.0f);
+    if(angle > 180.0f) angle -= 360.0f;
+    if(angle < -180.0f) angle += 360.0f;
+    return angle;
     }
 
-    float deg_to_rad(float degree) {
-        return degree * (M_PI/180);
+    float deg_to_rad(float degrees) {
+        return degrees * (M_PI / 180.0f);
+    }
+
+    float rad_to_deg(float radians) {
+        return radians * (180.0f / M_PI);
     }
 
     public:
 
     control inverseKinematics(state startState, state endState) {
-        control output;
+        control output{0, 0, 0};
+        constexpr float MAX_LINEAR = 200.0f;   // mm/s
+        constexpr float MAX_ANGULAR = 90.0f;    // deg/s
+        constexpr float POSITION_TOL = 10.0f;   // mm
+        constexpr float ANGLE_TOL = 2.0f;       // degrees
+        constexpr float KP_LINEAR = 0.8f;
+        constexpr float KP_ANGULAR = 2.5f;
+        constexpr float LOOKAHEAD_DIST = 150.0f; // mm
 
-        const float maxVelocity = 25; // Maximum velocity in any direction
-        const float maxOmega = 25;     // Maximum angular velocity
+        // Calculate position error in world coordinates
+        float errorX = endState.pos_x - startState.pos_x;
+        float errorY = endState.pos_y - startState.pos_y;
+        float targetDistance = hypotf(errorX, errorY);
+        
+        // Calculate angle errors
+        float targetHeading = atan2f(errorY, errorX) * (180/M_PI);
+        float headingError = normalize_angle_deg(targetHeading - startState.theta);
+        float finalHeadingError = normalize_angle_deg(endState.theta - startState.theta);
 
-        // turn these down if we want the robot to be slower closer to the target
-        const float kP_position = 50;
-        const float kP_rotation = 0.5;
-
-        // Compute the difference between the current and target states
-        float deltaX = endState.pos_x - startState.pos_x;
-        float deltaY = endState.pos_y - startState.pos_y;
-
-        float deltaTheta = endState.theta - startState.theta;
-
-        //the math here is about to get a little funny. but bascially the robot velocity function olny works in its own corrdinate 
-        //system disconnected from the field. i have to do some work with three different coordinates systems so i'll probably 
-        // have a notebook page dedicated to the mess of sines and cosines im about to spew
-
-        float angle_of_movment = atan2f (deltaY, deltaX);
-
-        float  angle_heading_is_displaced = deg_to_rad(normalize_angle_deg(startState.theta)) - angle_of_movment; 
-
-        // Compute the velocity in the x and y directions
-        output.velocity_x = kP_position * cosf(angle_heading_is_displaced);
-        output.velocity_y = kP_position * sinf(angle_heading_is_displaced);
-
-        // if the vector is over the max speed it nomralizes it and multiples it by 200 so it prevents the robot olny
-        // moving diagonally when the gap is big enough. this is basically a complex clamp 
-        if (sqrt((output.velocity_x * output.velocity_x) + (output.velocity_y * output.velocity_y)) > maxVelocity) {
-            output.velocity_x = ((output.velocity_x) / (sqrt((output.velocity_x * output.velocity_x) + (output.velocity_y * output.velocity_y)))) * 200;
-            output.velocity_y = ((output.velocity_y) / (sqrt((output.velocity_x * output.velocity_x) + (output.velocity_y * output.velocity_y)))) * 200;
+        // Calculate adaptive velocity scaling
+        float linearSpeed = KP_LINEAR * targetDistance;
+        linearSpeed = fminf(fmaxf(linearSpeed, 50.0f), MAX_LINEAR);
+        
+        // Calculate lookahead point for smoother motion
+        float lookaheadX = endState.pos_x + LOOKAHEAD_DIST * cosf(deg_to_rad(endState.theta));
+        float lookaheadY = endState.pos_y + LOOKAHEAD_DIST * sinf(deg_to_rad(endState.theta));
+        
+        // Switch to final orientation control when close
+        if(targetDistance < POSITION_TOL * 3) {
+            headingError = finalHeadingError;
+            linearSpeed *= 0.3f; // Slow down for final approach
         }
 
-        // this is for omega
+        // Convert world-frame vectors to robot-frame using rotation matrix
+        float cosTheta = cosf(deg_to_rad(startState.theta));
+        float sinTheta = sinf(deg_to_rad(startState.theta));
         
-        deltaTheta = normalize_angle_deg(deltaTheta);
+        // Transform lookahead point to robot coordinates
+        float robotX = (lookaheadX - startState.pos_x) * cosTheta + 
+                    (lookaheadY - startState.pos_y) * sinTheta;
+        float robotY = -(lookaheadX - startState.pos_x) * sinTheta + 
+                        (lookaheadY - startState.pos_y) * cosTheta;
 
-        // Compute the angular velocity (omega) for rotation
-        output.omega = kP_rotation * deltaTheta;
+        // Calculate curvature for smooth path following
+        float curvature = 2.0f * robotY / (robotX * robotX + robotY * robotY);
+        float angularSpeed = KP_ANGULAR * headingError + linearSpeed * curvature;
 
-        //this just clamps the omegas 
-        
-        if (output.omega > maxOmega) output.omega = maxOmega;
-        if (output.omega < -maxOmega) output.omega = -maxOmega;
+        // Velocity limiting
+        float speedRatio = fminf(1.0f, MAX_LINEAR / linearSpeed);
+        linearSpeed *= speedRatio;
+        angularSpeed = fminf(fmaxf(angularSpeed, -MAX_ANGULAR), MAX_ANGULAR);
+
+        // Convert to robot-centric velocity commands
+        output.velocity_x = linearSpeed * cosf(deg_to_rad(headingError));
+        output.velocity_y = linearSpeed * sinf(deg_to_rad(headingError));
+        output.omega = angularSpeed;
+
+        // Final position lock conditions
+        if(fabs(finalHeadingError) < ANGLE_TOL && targetDistance < POSITION_TOL) {
+            output.velocity_x = 0;
+            output.velocity_y = 0;
+            output.omega = 0;
+        }
 
         return output;
     }
@@ -516,8 +586,8 @@ class auto_control_funcs {
     bool robotIsReadyToMoveOnToNextState(state currentState, state targetState) {
         // Function that checks if the robot is ready to move on to the next
         //state
-        float pos_threshold = 1; 
-        float ang_threshold = 1; 
+        float pos_threshold = 10; 
+        float ang_threshold = 10; 
 
         float ErrorX = targetState.pos_x - currentState.pos_x;
         float ErrorY = targetState.pos_y - currentState.pos_y;
@@ -576,15 +646,15 @@ void drive_robot() {
 
         robot.drive_with_velocity(driver_direction);
 
-        if (Controller1.ButtonL1.pressing() == true) {
+        if (Controller1.ButtonR1.pressing() == true) {
             robot.close_piston();
-        }else if(Controller1.ButtonR1.pressing()) {
+        }else if(Controller1.ButtonL1.pressing()) {
             robot.open_piston();
         }
 
-        if(Controller1.ButtonR2.pressing() == true) {
+        if(Controller1.ButtonL2.pressing() == true) {
             robot.run_intake(-1);
-        } else if(Controller1.ButtonL2.pressing() == true) {
+        } else if(Controller1.ButtonR2.pressing() == true) {
             robot.run_intake(1);
         } else {
             robot.run_intake(0);
