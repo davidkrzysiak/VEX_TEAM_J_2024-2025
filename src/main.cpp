@@ -339,7 +339,6 @@ public:
         float previous_degree_y = Y_encoder.position(degrees);
         float odometry_x = 0;//GPS.xPosition();
         float odometry_y = 0;//GPS.yPosition();
-        float heading_offset = GPS.heading() - Inertial5.heading();
 
         while(true) {
 
@@ -523,15 +522,15 @@ class auto_control_funcs {
         // have a notebook page dedicated to the mess of sines and cosines im about to spew
 
         // Compute the velocity in the x and y directions
-        output.velocity_x = (deltaX * cosf(-Robot_state.theta)) - (deltaY *sinf(-Robot_state.theta));   
-        output.velocity_y = (deltaX * sinf(-Robot_state.theta)) - (deltaY *cosf(-Robot_state.theta));
+        output.velocity_x = 0.1*(deltaX * cosf(deg_to_rad(-Robot_state.theta))) - (deltaY *sinf(deg_to_rad(-Robot_state.theta)));   
+        output.velocity_y = 0.1*(deltaX * sinf(deg_to_rad(-Robot_state.theta))) - (deltaY *cosf(deg_to_rad(-Robot_state.theta)));
 
         // if the vector is over the max speed it nomralizes it and multiples it by 200 so it prevents the robot olny
         // moving diagonally when the gap is big enough. this is basically a complex clamp 
-        if (sqrt((output.velocity_x * output.velocity_x) + (output.velocity_y * output.velocity_y)) > maxVelocity) {
-            output.velocity_x = ((output.velocity_x) / (sqrt((output.velocity_x * output.velocity_x) + (output.velocity_y * output.velocity_y)))) * 200;
-            output.velocity_y = ((output.velocity_y) / (sqrt((output.velocity_x * output.velocity_x) + (output.velocity_y * output.velocity_y)))) * 200;
-        }
+       // if (sqrt((output.velocity_x * output.velocity_x) + (output.velocity_y * output.velocity_y)) > maxVelocity) {
+         //   output.velocity_x = ((output.velocity_x) / (sqrt((output.velocity_x * output.velocity_x) + (output.velocity_y * output.velocity_y)))) * 200;
+          //  output.velocity_y = ((output.velocity_y) / (sqrt((output.velocity_x * output.velocity_x) + (output.velocity_y * output.velocity_y)))) * 200;
+        //}
 
         // this is for omega
         
@@ -582,7 +581,7 @@ class auto_control_funcs {
 
                 robot.drive_with_velocity(movement);
 
-                wait(.01, seconds);
+                wait(.001, seconds);
             }
 
             Brain.Screen.print("nextstate");
@@ -639,7 +638,7 @@ void drive_robot() {
 
 void auto_loop() {
 
-    while(GPS.isCalibrating() == true){wait(0.1, seconds);}
+   while(GPS.isCalibrating() == true){wait(0.1, seconds);}
 
    auto_func.follow_tragectory(Automonus_tragectory);
 
