@@ -72,6 +72,10 @@ struct control {
    float omega;
 };
 
+// this is the number that will be updated constantly
+
+static state Robot_state;
+
 // self explanatory
 
 class PIDController
@@ -235,10 +239,6 @@ static PIDController TL_motor;
 static PIDController BR_motor;
 static PIDController BL_motor;
 
-// this is the number that will be updated constantly
-
-static state Robot_state;
-
 //this below is the list that controls auto its a sequence that tells the code where the robot should be 
 //currently its based on position so it will stop at every point(kinda theres nuiance)
 std::list<state> Automonus_tragectory = {
@@ -247,14 +247,17 @@ std::list<state> Automonus_tragectory = {
     state{-1151,-672,30,true,0},
     state{-1123,-582,180,true,-1},
     state{-740,-545,180,true,-1},
-    //state{-600,-1500,180,true,1},
-    state{-1200,-1500,0,true,-1},
-    state{-900,-1500,180,true,1},
-    state{-900,-1200,180,true,1},
-    state{-1200,-1200,0,true,1},
-    state{-1500,-1200,0,true,1},
-    state{-1500,-1500,90,true,1},
-    state{-1700,-1700,110,true,0}
+    state{-468,-812,90,true,1},
+    state{-422,-1224,90,true,-1},
+    state{-756,-1493,21,true,-1},
+    state{-943,-1606,22,true,-1},
+    state{-917,-1658,283,true,-1},
+    state{-883,-1323,270,true,-1},
+    state{-1025,-1416,357,true,-1},
+    state{-1437,-1313,3,true,-1},
+    state{-1745,-1341,246,false,-1},
+    state{-1150,240,90,false,0},
+    state{-1150,568,84,true,0}
 };
 
 //robot class!!!! yay this define the things the robot can do and its parameters
@@ -262,10 +265,6 @@ std::list<state> Automonus_tragectory = {
 class Robot
 {
 private:
-   
-    float diameter_of_wheels = 2.75;
-
-    int angle_of_wheels = 45;
 
     bool piston_pos = false;  
 
@@ -291,12 +290,6 @@ private:
         }
 
         return meanDeg;
-    }
-
-    void polarToCartesian(double r, double theta, double &x, double &y) {
-        double rad = (theta + 45.0) * M_PI / 180.0;  // Convert to radians and apply offset
-        x = r * cos(rad);
-        y = r * sin(rad);
     }
 
     static float wieghted_average_of_2_values(float mean1, float wieght1, float mean2, float wieght2) {
@@ -329,13 +322,46 @@ private:
 
     }
 
+    static float compute_mean(float data_list[], int size) {
+
+        float sum = 0;
+
+        for(int i = 0; i < size;) {
+
+            sum = sum + data_list[i];
+
+            i = i + 1;
+
+        }
+
+        return sum / size;
+
+    }
+
+    static float compute_fake_stdev(float data_list[], float mean, int size) {
+    
+        float sum = 0;
+
+        for(int i = 0; i < size;) {
+
+            sum = sum + abs(mean - data_list[i]);
+
+            i = i + 1;
+
+        }
+
+        return sum / size;
+
+    }
+
+    
 public:
 
     static void state_updater() {
 
         //todo 
+        // figure out how to make state estimation less jittery; i maybe fized this ?!?!?!!?? maybe add time delay so it has enough time to change
         // figure out the inital state of the robot 
-        // figure out how to make state estimation less jittery
         // learn how to use odom decay (evaluate if its even useful with the jittery gps)
 
         //calibration sequence
@@ -349,8 +375,9 @@ public:
         const float WHEEL_DIAMETER = 50.8; // mm
         const float ENCODER_TPI = (360.0 / (WHEEL_DIAMETER * M_PI)); // Ticks per mm
         const float GPS_TRUST_THRESHOLD = 0.8; // Minimum GPS quality to trust
-        const float ODOMETRY_DECAY = 0.98; 
         const float odometry_wieght = 100; // Odometry error decay factor
+        const int number_of_samples = 15;
+        const float stall_threshold = 0.001;
 
         // State variables
         float previous_degree_x = -X_encoder.position(degrees);     
@@ -360,9 +387,20 @@ public:
 
         while(true) {
 
-            // Get sensor data with error checking
-            float gps_x = GPS.xPosition();
-            float gps_y = GPS.yPosition();
+            // sample the The gps positions
+            float gps_sample_x[number_of_samples];
+            float gps_sample_y[number_of_samples];
+
+            for (int i = 0; i < number_of_samples;) {
+                
+                gps_sample_x[i] = GPS.xPosition(); 
+                gps_sample_y[i] = GPS.yPosition();
+
+                i = i + 1;
+            }
+
+            float gps_x = compute_mean(gps_sample_x, number_of_samples);
+            float gps_y = compute_mean(gps_sample_y, number_of_samples);
             float gps_heading = GPS.heading();
             float gps_quality = GPS.quality();
             float inertial_heading = Inertial5.heading();
@@ -375,13 +413,13 @@ public:
 
             // gets the average angle between gps and gyro when gps quality is high 
 
-            if(gps_quality > GPS_TRUST_THRESHOLD) {
+            if(gps_quality > GPS_TRUST_THRESHOLD && compute_fake_stdev(gps_sample_x, gps_x, number_of_samples) < stall_threshold ) {
             
-                Robot_state.theta = get_average_angle(heading_to_angle(GPS.heading()), heading_to_angle(Inertial5.heading()));
+                Robot_state.theta = get_average_angle(heading_to_angle(gps_heading), heading_to_angle(inertial_heading));
 
             }else {
 
-                Robot_state.theta = heading_to_angle(Inertial5.heading());
+                Robot_state.theta = heading_to_angle(inertial_heading);
 
             }
 
@@ -394,10 +432,10 @@ public:
             odometry_y = dx_enc * sin_theta + dy_enc * cos_theta;
 
             // Fuse GPS and odometry using adaptive weighting
-            if(gps_quality > GPS_TRUST_THRESHOLD) {
+            if(gps_quality > GPS_TRUST_THRESHOLD && compute_fake_stdev(gps_sample_x, gps_x, number_of_samples) < stall_threshold) {
             
-                Robot_state.pos_x = wieghted_average_of_2_values(GPS.xPosition(), gps_quality, Robot_state.pos_x + odometry_x, odometry_wieght);
-                Robot_state.pos_y = wieghted_average_of_2_values(GPS.yPosition(), gps_quality, Robot_state.pos_y + odometry_y, odometry_wieght);
+                Robot_state.pos_x = wieghted_average_of_2_values(gps_x, gps_quality, Robot_state.pos_x + odometry_x, odometry_wieght);
+                Robot_state.pos_y = wieghted_average_of_2_values(gps_y, gps_quality, Robot_state.pos_y + odometry_y, odometry_wieght);
 
             } else {
                 // Use pure odometry when GPS is unreliable
@@ -405,12 +443,12 @@ public:
                 Robot_state.pos_y = Robot_state.pos_y + odometry_y;
             }
 
-        // Apply odometry error decay
-        //odometry_x += (Robot_state.pos_x - odometry_x) * (1 - ODOMETRY_DECAY);
-        //odometry_y += (Robot_state.pos_y - odometry_y) * (1 - ODOMETRY_DECAY);
+            // Apply odometry error decay
+            //odometry_x += (Robot_state.pos_x - odometry_x) * (1 - ODOMETRY_DECAY);
+            //odometry_y += (Robot_state.pos_y - odometry_y) * (1 - ODOMETRY_DECAY);
 
-        wait(10, msec); // Consistent update interval
-    }
+            wait(1, msec); // Consistent update interval
+        }
     }
 
     static void spin() {
@@ -603,7 +641,7 @@ class auto_control_funcs {
 
                 robot.drive_with_velocity(movement);
 
-                wait(.001, seconds);
+                wait(.01, seconds);
             }
 
             // Update additional actuators (intake, piston) if needed:
