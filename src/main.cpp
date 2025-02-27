@@ -42,6 +42,14 @@ digital_out clamp_piston1 = digital_out(Brain.ThreeWirePort.A);
 digital_out clamp_piston2 = digital_out(Brain.ThreeWirePort.B);
 vex::rotation X_encoder = rotation(PORT16);
 vex::rotation Y_encoder = rotation(PORT15);
+//enables functions i may need when programming when holding R1 on startup 
+bool debug_mode = true;
+
+//TODO 
+//fix intake func(rn its backwards)
+//improve odom precision 
+
+
 
 // these are some structs to control and store the robots states in a compact form
 
@@ -234,9 +242,19 @@ static state Robot_state;
 //this below is the list that controls auto its a sequence that tells the code where the robot should be 
 //currently its based on position so it will stop at every point(kinda theres nuiance)
 std::list<state> Automonus_tragectory = {
-    state{120,120,0,false,1},
-    state{130,110,10,true,0},
-    state{140,100,20,false,-1}
+    //state[x-pos(mm), y-pos(mm), theta(degrees), piston - up = false - down = true, Intake toggle - 1 = forward - 0 = off - -1 = backward] 
+    state{-1400,-750,30,false,0},
+    state{-1151,-672,30,true,0},
+    state{-1123,-582,180,true,-1},
+    state{-740,-545,180,true,-1},
+    //state{-600,-1500,180,true,1},
+    state{-1200,-1500,0,true,-1},
+    state{-900,-1500,180,true,1},
+    state{-900,-1200,180,true,1},
+    state{-1200,-1200,0,true,1},
+    state{-1500,-1200,0,true,1},
+    state{-1500,-1500,90,true,1},
+    state{-1700,-1700,110,true,0}
 };
 
 //robot class!!!! yay this define the things the robot can do and its parameters
@@ -337,8 +355,8 @@ public:
         // State variables
         float previous_degree_x = -X_encoder.position(degrees);     
         float previous_degree_y = Y_encoder.position(degrees);
-        float odometry_x = 0;//GPS.xPosition();
-        float odometry_y = 0;//GPS.yPosition();
+        float odometry_x = GPS.xPosition();
+        float odometry_y = GPS.yPosition();
 
         while(true) {
 
@@ -372,19 +390,19 @@ public:
             float cos_theta = cosf(theta_rad);
             float sin_theta = sinf(theta_rad);
         
-            odometry_x += dx_enc * cos_theta - dy_enc * sin_theta;
-            odometry_y += dx_enc * sin_theta + dy_enc * cos_theta;
+            odometry_x = dx_enc * cos_theta - dy_enc * sin_theta;
+            odometry_y = dx_enc * sin_theta + dy_enc * cos_theta;
 
             // Fuse GPS and odometry using adaptive weighting
-            if(0 > GPS_TRUST_THRESHOLD) {
+            if(gps_quality > GPS_TRUST_THRESHOLD) {
             
-                Robot_state.pos_x = wieghted_average_of_2_values(GPS.xPosition(), gps_quality, odometry_x, odometry_wieght);
-                Robot_state.pos_y = wieghted_average_of_2_values(GPS.yPosition(), gps_quality, odometry_x, odometry_wieght);
+                Robot_state.pos_x = wieghted_average_of_2_values(GPS.xPosition(), gps_quality, Robot_state.pos_x + odometry_x, odometry_wieght);
+                Robot_state.pos_y = wieghted_average_of_2_values(GPS.yPosition(), gps_quality, Robot_state.pos_y + odometry_y, odometry_wieght);
 
             } else {
                 // Use pure odometry when GPS is unreliable
-                Robot_state.pos_x = odometry_x;
-                Robot_state.pos_y = odometry_y;
+                Robot_state.pos_x = Robot_state.pos_x + odometry_x;
+                Robot_state.pos_y = Robot_state.pos_y + odometry_y;
             }
 
         // Apply odometry error decay
@@ -418,16 +436,16 @@ public:
     void run_intake(int direction) {
         // the direction parameter defines which way you want it to go -1 for backwards 1 for forwards and 0 for stop 
         //ig you put any number but it is already maxed out 
-        intake_motor.spin(forward, direction*10, volt);
-        intake_arm_half_motor.spin(forward,direction*10, volt);
+        intake_motor.spin(forward, direction *12, volt);
+        intake_arm_half_motor.spin(forward, direction*12, volt);
 
     }
 
-    void toggle_piston(){
+    void set_piston_to(bool state){
 
-        clamp_piston1.set(!piston_pos);
+        clamp_piston1.set(state);
 
-        piston_pos = !piston_pos;
+        piston_pos = state;
 
     }
 
@@ -476,8 +494,6 @@ public:
     }
 };
 
-//created robot object 
-
 Robot robot;
 
 class auto_control_funcs {
@@ -503,55 +519,61 @@ class auto_control_funcs {
 
     control inverseKinematics(state startState, state endState) {
         control output;
+    
+        // Tunable gains and limits:
+        const float maxVelocity = 150;   // Maximum translational command (units match your system)
+        const float maxOmega = 100;       // Maximum rotational command (degrees or rpm, as appropriate)
+        const float kP_position = 0.8;   // Proportional gain for translation
+        const float kP_rotation = 1;   // Proportional gain for rotation
 
-        const float maxVelocity = 25; // Maximum velocity in any direction
-        const float maxOmega = 25;     // Maximum angular velocity
+        // Compute field coordinate error (assumes field X = right, field Y = up)
+        float deltaX = endState.pos_x - startState.pos_x; // Error to the right
+        float deltaY = endState.pos_y - startState.pos_y; // Error upward
 
-        // turn these down if we want the robot to be slower closer to the target
-        const float kP_position = 50;
-        const float kP_rotation = 0.5;
-
-        // Compute the difference between the current and target states
-        float deltaX = endState.pos_x - startState.pos_x;
-        float deltaY = endState.pos_y - startState.pos_y;
-
+        // Compute angular error (desired heading minus current heading)
         float deltaTheta = endState.theta - startState.theta;
-
-        //the math here is about to get a little funny. but bascially the robot velocity function olny works in its own corrdinate 
-        //system disconnected from the field. i have to do some work with three different coordinates systems so i'll probably 
-        // have a notebook page dedicated to the mess of sines and cosines im about to spew
-
-        // Compute the velocity in the x and y directions
-        output.velocity_x = 0.1*(deltaX * cosf(deg_to_rad(-Robot_state.theta))) - (deltaY *sinf(deg_to_rad(-Robot_state.theta)));   
-        output.velocity_y = 0.1*(deltaX * sinf(deg_to_rad(-Robot_state.theta))) - (deltaY *cosf(deg_to_rad(-Robot_state.theta)));
-
-        // if the vector is over the max speed it nomralizes it and multiples it by 200 so it prevents the robot olny
-        // moving diagonally when the gap is big enough. this is basically a complex clamp 
-       // if (sqrt((output.velocity_x * output.velocity_x) + (output.velocity_y * output.velocity_y)) > maxVelocity) {
-         //   output.velocity_x = ((output.velocity_x) / (sqrt((output.velocity_x * output.velocity_x) + (output.velocity_y * output.velocity_y)))) * 200;
-          //  output.velocity_y = ((output.velocity_y) / (sqrt((output.velocity_x * output.velocity_x) + (output.velocity_y * output.velocity_y)))) * 200;
-        //}
-
-        // this is for omega
+        // Normalize to the range [-180, 180]
+        normalize_angle_deg(deltaTheta);
         
-        //deltaTheta = normalize_angle_deg(deltaTheta);
+        // Compute desired field velocities using proportional control:
+        // We want a forward command proportional to field Y error and strafe to field X error.
+        float v_field_Y = kP_position * deltaY;  // “Forward” in field space (up)
+        float v_field_X = kP_position * deltaX;  // “Right” in field space
 
-        // Compute the angular velocity (omega) for rotation
-        //output.omega = kP_rotation * deltaTheta;
+        // Convert from field coordinates to robot coordinates.
+        // Our assumption: when robot heading = 0, its forward (velocity_x) aligns with field +Y and its strafe (velocity_y) aligns with field +X.
+        // To convert, we rotate the vector by the robot's heading angle (in radians).
+        float currentThetaRad = deg_to_rad(startState.theta);  // convert degrees to radians
 
-        //this just clamps the omegas 
+        // Using the rotation matrix for a rotation by +theta:
+        // [ v_forward ]   [ cos(theta)    sin(theta) ] [ v_field_Y ]
+        // [ v_strafe  ] = [ -sin(theta)   cos(theta) ] [ v_field_X ]
+        float v_forward = cos(currentThetaRad) * v_field_Y - sin(currentThetaRad) * v_field_X;
+        float v_strafe  = sin(currentThetaRad) * v_field_Y + cos(currentThetaRad) * v_field_X;
+
+        output.velocity_x = v_forward;  // robot forward command
+        output.velocity_y = -v_strafe;   // robot strafe command
+
+        // Clamp translational velocity if the magnitude is above maxVelocity:
+        float norm = sqrt(v_forward * v_forward + v_strafe * v_strafe);
+        if (norm > maxVelocity) {
+            output.velocity_x = (v_forward / norm) * maxVelocity;
+            output.velocity_y = -(v_strafe / norm) * maxVelocity;
+        }
+
+        // Compute rotational (angular) velocity command:
+        output.omega = -kP_rotation * deltaTheta;
+        if (output.omega > maxOmega) output.omega = maxOmega;
+        if (output.omega < -maxOmega) output.omega = -maxOmega;
         
-        //if (output.omega > maxOmega) output.omega = maxOmega;
-        //if (output.omega < -maxOmega) output.omega = -maxOmega;
-
         return output;
     }
 
     bool robotIsReadyToMoveOnToNextState(state currentState, state targetState) {
         // Function that checks if the robot is ready to move on to the next
         //state
-        float pos_threshold = 10; 
-        float ang_threshold = 10; 
+        float pos_threshold = 45; 
+        float ang_threshold = 5; 
 
         float ErrorX = targetState.pos_x - currentState.pos_x;
         float ErrorY = targetState.pos_y - currentState.pos_y;
@@ -560,10 +582,10 @@ class auto_control_funcs {
          //angle stuff Normalize the angle difference 
 
         float angleDifference = targetState.theta - currentState.theta;
-        while (angleDifference > 180) angleDifference -= 360;
-        while (angleDifference < -180) angleDifference += 360;
 
-        if (distanceToTarget < pos_threshold && abs(angleDifference) < ang_threshold) {
+        normalize_angle_deg(angleDifference);
+
+        if (distanceToTarget < pos_threshold && abs(angleDifference) < ang_threshold) {  
           return true;
         }
         else {
@@ -583,6 +605,11 @@ class auto_control_funcs {
 
                 wait(.001, seconds);
             }
+
+            // Update additional actuators (intake, piston) if needed:
+
+            robot.set_piston_to(targetState.piston_clamped);
+            robot.run_intake(targetState.intake_moving); 
 
             Brain.Screen.print("nextstate");
             Brain.Screen.newLine();
@@ -624,15 +651,16 @@ void drive_robot() {
             robot.run_intake(0);
         }
 
-        if(Controller1.ButtonX.pressing() == true) {
-            lady_brown.spin(forward, 3, volt);
-        } else if(Controller1.ButtonB.pressing() == true) {
-            lady_brown.spin(reverse, 3, volt);
-        } else {
-            lady_brown.stop(hold); 
-        }
+        if (debug_mode == true) {
 
-        // x and b for lady brown 
+            if (Controller1.ButtonX.pressing() == true) {
+
+                Brain.Screen.print("X%.1f Y%.1f T%.1f",Robot_state.pos_x, Robot_state.pos_y, Robot_state.theta);
+                Brain.Screen.newLine();
+                wait(1, seconds); 
+
+            }
+        }
     }
 }
 
@@ -641,31 +669,6 @@ void auto_loop() {
    while(GPS.isCalibrating() == true){wait(0.1, seconds);}
 
    auto_func.follow_tragectory(Automonus_tragectory);
-
-   control forward;
-   forward.velocity_y = -100;
-   forward.velocity_x = 0;
-   forward.omega = 0;
-
-   robot.drive_with_velocity(forward);
-
-   forward.velocity_y = -2000;
-
-   wait(0.5,seconds);
-
-   robot.drive_with_velocity(forward);
-
-   wait(1, seconds);
-
-   forward.velocity_y= 0 ; 
-
-   robot.drive_with_velocity(forward);
-
-   robot.open_piston();
-
-   wait(0.1, seconds);
-
-   robot.run_intake(-1);
 
 }
 
