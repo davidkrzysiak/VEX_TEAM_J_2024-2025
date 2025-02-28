@@ -49,8 +49,6 @@ bool debug_mode = true;
 //fix intake func(rn its backwards)
 //improve odom precision 
 
-
-
 // these are some structs to control and store the robots states in a compact form
 
 struct state {
@@ -247,7 +245,7 @@ std::list<state> Automonus_tragectory = {
     state{-1151,-672,30,true,0},
     state{-1123,-582,180,true,-1},
     state{-740,-545,180,true,-1},
-    state{-468,-812,90,true,1},
+    state{-468,-812,90,true,-1},
     state{-422,-1224,90,true,-1},
     state{-756,-1493,21,true,-1},
     state{-943,-1606,22,true,-1},
@@ -374,10 +372,10 @@ public:
         // Configuration constants
         const float WHEEL_DIAMETER = 50.8; // mm
         const float ENCODER_TPI = (360.0 / (WHEEL_DIAMETER * M_PI)); // Ticks per mm
-        const float GPS_TRUST_THRESHOLD = 0.8; // Minimum GPS quality to trust
+        const float GPS_TRUST_THRESHOLD = 0.85; // Minimum GPS quality to trust
         const float odometry_wieght = 100; // Odometry error decay factor
-        const int number_of_samples = 15;
-        const float stall_threshold = 0.001;
+        const int number_of_samples = 5;
+        const float stall_threshold = .001;
 
         // State variables
         float previous_degree_x = -X_encoder.position(degrees);     
@@ -397,6 +395,8 @@ public:
                 gps_sample_y[i] = GPS.yPosition();
 
                 i = i + 1;
+
+                wait(.04, seconds);
             }
 
             float gps_x = compute_mean(gps_sample_x, number_of_samples);
@@ -413,7 +413,7 @@ public:
 
             // gets the average angle between gps and gyro when gps quality is high 
 
-            if(gps_quality > GPS_TRUST_THRESHOLD && compute_fake_stdev(gps_sample_x, gps_x, number_of_samples) < stall_threshold ) {
+            if(gps_quality > GPS_TRUST_THRESHOLD) {
             
                 Robot_state.theta = get_average_angle(heading_to_angle(gps_heading), heading_to_angle(inertial_heading));
 
@@ -432,7 +432,7 @@ public:
             odometry_y = dx_enc * sin_theta + dy_enc * cos_theta;
 
             // Fuse GPS and odometry using adaptive weighting
-            if(gps_quality > GPS_TRUST_THRESHOLD && compute_fake_stdev(gps_sample_x, gps_x, number_of_samples) < stall_threshold) {
+            if(gps_quality > GPS_TRUST_THRESHOLD) {
             
                 Robot_state.pos_x = wieghted_average_of_2_values(gps_x, gps_quality, Robot_state.pos_x + odometry_x, odometry_wieght);
                 Robot_state.pos_y = wieghted_average_of_2_values(gps_y, gps_quality, Robot_state.pos_y + odometry_y, odometry_wieght);
@@ -474,8 +474,8 @@ public:
     void run_intake(int direction) {
         // the direction parameter defines which way you want it to go -1 for backwards 1 for forwards and 0 for stop 
         //ig you put any number but it is already maxed out 
-        intake_motor.spin(forward, direction *12, volt);
-        intake_arm_half_motor.spin(forward, direction*12, volt);
+        intake_motor.spin(forward, direction *10, volt);   
+        intake_arm_half_motor.spin(forward, direction*10, volt);
 
     }
 
@@ -561,8 +561,8 @@ class auto_control_funcs {
         // Tunable gains and limits:
         const float maxVelocity = 150;   // Maximum translational command (units match your system)
         const float maxOmega = 100;       // Maximum rotational command (degrees or rpm, as appropriate)
-        const float kP_position = 0.8;   // Proportional gain for translation
-        const float kP_rotation = 1;   // Proportional gain for rotation
+        const float kP_position = 1;   // Proportional gain for translation
+        const float kP_rotation = 1.2;   // Proportional gain for rotation
 
         // Compute field coordinate error (assumes field X = right, field Y = up)
         float deltaX = endState.pos_x - startState.pos_x; // Error to the right
